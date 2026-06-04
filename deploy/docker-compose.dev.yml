@@ -1,0 +1,176 @@
+# =============================================================================
+# deploy/docker-compose.dev.yml — development overrides
+# Use with:
+#   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up
+# or set COMPOSE_FILE in .env to include both files.
+#
+# Overrides:
+#   - api, worker: bind-mount source, enable reload, run as root for easier dev
+#   - web: run Vite dev server (port 5173) instead of nginx static
+#   - expose infra ports (5432, 6379, 9000, 9001) on localhost
+# =============================================================================
+name: ${PROJECT_NAME:-blocktool}-dev
+
+# Re-declare the env anchor in the dev file — YAML anchors don't merge across
+# compose files, so this duplicates the block from docker-compose.yml.
+x-api-env: &api-env
+  DATABASE_URL: ${DATABASE_URL}
+  DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+  REDIS_URL: ${REDIS_URL}
+  REDIS_CELERY_URL: ${REDIS_CELERY_URL}
+  S3_ENDPOINT: ${S3_ENDPOINT}
+  S3_REGION: ${S3_REGION}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_BUCKET_CAPTURES: ${S3_BUCKET_CAPTURES}
+  S3_BUCKET_RECON: ${S3_BUCKET_RECON}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  PYTHONUNBUFFERED: "1"
+  PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL}
+  CORS_ALLOW_ORIGINS: ${PUBLIC_WEB_BASE_URL}
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  minio:
+    ports:
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.dev
+    volumes:
+      - ../apps/api:/app/apps/api:rw
+    command:
+      - uvicorn
+      - src.app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+    environment:
+      <<: *api-env
+      ENVIRONMENT: dev
+    user: "0:0"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.dev
+    volumes:
+      - ../apps/api:/app/apps/api:rw
+    command: ["celery", "-A", "src.workers.celery_app", "worker", "--loglevel=debug", "--reload"]
+    environment:
+      <<: *api-env
+      ENVIRONMENT: dev
+    user: "0:0"
+
+  web:
+    # In dev we run Vite directly with HMR; mount the source so changes are
+    # picked up without rebuilding the image. The dev image bakes in
+    # Playwright + Chromium so the e2e suite can run from this same image
+    # (the brief: 'Dockerfile dev 镜像里也要装').
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile.dev
+    image: ${PROJECT_NAME:-blocktool}_web_dev:latest
+    container_name: ${PROJECT_NAME:-blocktool}_web_dev
+    working_dir: /repo/apps/web
+    command: >
+      sh -c "corepack enable &&
+             corepack prepare pnpm@9.12.1 --activate &&
+             pnpm install --frozen-lockfile=false &&
+             pnpm exec playwright install --with-deps chromium &&
+             pnpm dev --host 0.0.0.0 --port 5173"
+    volumes:
+      - ..:/repo
+      - web_node_modules:/repo/apps/web/node_modules
+      - web_pnpm_store:/repo/.pnpm-store
+    networks:
+      - blocknet
+    ports:
+      - "127.0.0.1:${WEB_DEV_PORT:-5173}:5173"
+    environment:
+      VITE_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8000}
+      NODE_ENV: development
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  proxy:
+    # Skip the proxy in dev — services are accessed directly on their host
+    # ports. Remove this override to bring Caddy back.
+    profiles: ["never"]
+
+  # ----------------------------------------------------------------------- E2E
+  # One-shot E2E test runner. To use:
+  #   docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml \
+  #     run --rm e2e pnpm e2e
+  # The image is the dev web image (which has Playwright + Chromium) with
+  # the test files bind-mounted in. We use `run` instead of `up` because
+  # E2E is a job, not a service.
+  e2e:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile.dev
+    image: ${PROJECT_NAME:-blocktool}_web_dev:latest
+    container_name: ${PROJECT_NAME:-blocktool}_e2e
+    working_dir: /repo
+    command:
+      - sh
+      - -c
+      - "corepack enable &&
+         corepack prepare pnpm@9.12.1 --activate &&
+         pnpm install --frozen-lockfile=false &&
+         pnpm exec playwright install --with-deps chromium &&
+         pnpm exec playwright test"
+    volumes:
+      - ..:/repo
+      - e2e_node_modules:/repo/node_modules
+      - e2e_pnpm_store:/repo/.pnpm-store
+    networks:
+      - blocknet
+    environment:
+      # When the proxy is off, the API is reachable on the host loopback
+      # from inside the container via host.docker.internal.
+      BLOCKTOOL_E2E_BASE_URL: ${BLOCKTOOL_E2E_BASE_URL:-http://host.docker.internal:5173}
+      PLAYWRIGHT_HEADED: "0"
+    profiles: ["e2e"]
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  web_node_modules:
+    name: ${PROJECT_NAME:-blocktool}_web_node_modules
+  web_pnpm_store:
+    name: ${PROJECT_NAME:-blocktool}_web_pnpm_store
+  e2e_node_modules:
+    name: ${PROJECT_NAME:-blocktool}_e2e_node_modules
+  e2e_pnpm_store:
+    name: ${PROJECT_NAME:-blocktool}_e2e_pnpm_store
+
+networks:
+  blocknet:
+    name: blocknet
+    driver: bridge

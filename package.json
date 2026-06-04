@@ -1,0 +1,38 @@
+{
+  "name": "blocktool-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "积木建模工具 monorepo root (pnpm workspace + uv workspace)",
+  "packageManager": "pnpm@9.12.1",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "docker compose -f deploy/docker-compose.dev.yml up",
+    "build": "pnpm -r --filter='./apps/*' build",
+    "lint": "pnpm -r --filter='./apps/*' lint",
+    "test": "pnpm -r --filter='./apps/*' test",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}\" --ignore-path .gitignore",
+    "typecheck": "pnpm -r --filter='./apps/*' typecheck",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium",
+    "up": "bash scripts/up.sh",
+    "clean": "pnpm -r --filter='./apps/*' clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.10.0",
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^20.14.10",
+    "eslint": "^9.10.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-jsx-a11y": "^6.10.0",
+    "eslint-plugin-react": "^7.36.1",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.5.0"
+  }
+}

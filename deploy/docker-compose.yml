@@ -1,0 +1,273 @@
+# =============================================================================
+# deploy/docker-compose.yml — full-stack production-ish orchestration
+# Services:
+#   - postgres  (16)            : primary datastore
+#   - redis     (7)             : celery broker + result backend
+#   - minio     (latest)        : S3-compatible object store
+#   - minio-init (one-shot)     : creates the project buckets
+#   - api       (FastAPI)       : HTTP API
+#   - worker    (Celery)        : background jobs (3D reconstruction etc.)
+#   - web       (nginx)         : static PWA bundle
+#   - proxy     (Caddy)         : single front door on :80/:443
+# =============================================================================
+name: ${PROJECT_NAME:-blocktool}
+
+networks:
+  blocknet:
+    name: blocknet
+    driver: bridge
+
+x-api-env: &api-env
+  DATABASE_URL: ${DATABASE_URL}
+  DATABASE_URL_SYNC: ${DATABASE_URL_SYNC}
+  REDIS_URL: ${REDIS_URL}
+  REDIS_CELERY_URL: ${REDIS_CELERY_URL}
+  S3_ENDPOINT: ${S3_ENDPOINT}
+  S3_REGION: ${S3_REGION}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_BUCKET_CAPTURES: ${S3_BUCKET_CAPTURES}
+  S3_BUCKET_RECON: ${S3_BUCKET_RECON}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  PYTHONUNBUFFERED: "1"
+  PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL}
+  CORS_ALLOW_ORIGINS: ${PUBLIC_WEB_BASE_URL}
+
+services:
+  # ---------------------------------------------------------------- Postgres
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${PROJECT_NAME:-blocktool}_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks: [blocknet]
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ------------------------------------------------------------------- Redis
+  redis:
+    image: redis:7-alpine
+    container_name: ${PROJECT_NAME:-blocktool}_redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redis_data:/data
+    networks: [blocknet]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ------------------------------------------------------------------- MinIO
+  minio:
+    image: minio/minio:latest
+    container_name: ${PROJECT_NAME:-blocktool}_minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    networks: [blocknet]
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # --------------------------------------------------------- minio (one-shot)
+  minio-init:
+    image: minio/mc:latest
+    container_name: ${PROJECT_NAME:-blocktool}_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks: [blocknet]
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
+      (mc mb --ignore-existing local/${MINIO_BUCKET_CAPTURES} || true) &&
+      (mc mb --ignore-existing local/${MINIO_BUCKET_RECON} || true) &&
+      mc anonymous set download local/${MINIO_BUCKET_RECON} || true &&
+      echo 'minio-init: buckets ready'
+      "
+    restart: "no"
+
+  # --------------------------------------------------------------------- API
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: ${PROJECT_NAME:-blocktool}_api:latest
+    container_name: ${PROJECT_NAME:-blocktool}_api
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    networks: [blocknet]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ------------------------------------------------------------------ Worker
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: ${PROJECT_NAME:-blocktool}_api:latest
+    container_name: ${PROJECT_NAME:-blocktool}_worker
+    restart: unless-stopped
+    environment:
+      <<: *api-env
+    networks: [blocknet]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    # The real entrypoint (celery worker) is wired in by the api-app task.
+    command: ["celery", "-A", "src.workers.celery_app", "worker", "--loglevel=info"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "celery -A src.workers.celery_app inspect ping -d celery@$$HOSTNAME || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # --------------------------------------------------------------------- Web
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    image: ${PROJECT_NAME:-blocktool}_web:latest
+    container_name: ${PROJECT_NAME:-blocktool}_web
+    restart: unless-stopped
+    networks: [blocknet]
+    ports:
+      - "127.0.0.1:${WEB_DEV_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  # ------------------------------------------------------------------ Proxy
+  proxy:
+    image: caddy:2-alpine
+    container_name: ${PROJECT_NAME:-blocktool}_proxy
+    restart: unless-stopped
+    networks: [blocknet]
+    ports:
+      - "${PROXY_HTTP_PORT:-80}:80"
+      - "${PROXY_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ------------------------------------------------------------------ Migrate
+  # One-shot service: runs `alembic upgrade head` against the freshly-started
+  # Postgres, then exits. Compose treats it as a no-op if it has already
+  # completed (via the `restart: no` + `service_completed_successfully`
+  # gate on dependent services).
+  #
+  # This keeps the API image as the source of truth for migration scripts
+  # (alembic.ini + apps/api/alembic/) without baking an entrypoint script
+  # into the runtime image.
+  migrate:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    image: ${PROJECT_NAME:-blocktool}_api:latest
+    container_name: ${PROJECT_NAME:-blocktool}_migrate
+    networks: [blocknet]
+    environment:
+      <<: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # The same image used by the API; we just swap the CMD to run alembic
+    # once. The working directory inside the image is /app/apps/api, which
+    # is where alembic.ini lives.
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    healthcheck:
+      # The container exits 0 on success and 1 on failure, so a normal
+      # docker-compose `ps` status check is enough — no in-container probe.
+      test: ["CMD", "true"]
+      interval: 30s
+      timeout: 5s
+      retries: 1
+      start_period: 5s
+
+volumes:
+  pg_data:
+    name: ${PROJECT_NAME:-blocktool}_pg_data
+  minio_data:
+    name: ${PROJECT_NAME:-blocktool}_minio_data
+  redis_data:
+    name: ${PROJECT_NAME:-blocktool}_redis_data
+  caddy_data:
+    name: ${PROJECT_NAME:-blocktool}_caddy_data
+  caddy_config:
+    name: ${PROJECT_NAME:-blocktool}_caddy_config

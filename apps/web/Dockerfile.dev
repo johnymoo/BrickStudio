@@ -1,0 +1,27 @@
+# =============================================================================
+# apps/web/Dockerfile.dev
+# Local dev image for the web app — used by docker-compose.dev.yml.
+#
+# Includes Playwright (with Chromium) so the same image can drive E2E tests
+# via `pnpm e2e:install` / `pnpm e2e`. Mount the repo as a volume for HMR.
+# =============================================================================
+FROM node:20-alpine
+
+# System deps that Playwright's Chromium needs at runtime. The full
+# `--with-deps` install also needs git (already in alpine) and a C
+# toolchain. We bake these in so `playwright install --with-deps` is
+# a no-op for system deps (only the browser binary is downloaded).
+RUN apk add --no-cache \
+        chromium \
+        nss \
+        freetype \
+        harfbuzz \
+        ca-certificates \
+        ttf-freefont \
+        bash \
+        curl \
+    && ln -sf /usr/bin/chromium /usr/local/bin/chromium-browser
+
+RUN corepack enable && corepack prepare pnpm@9.12.1 --activate
+
+WORKDIR /repo

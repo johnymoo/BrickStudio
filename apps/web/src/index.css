@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    @apply font-sans antialiased;
+    overscroll-behavior-y: none;
+  }
+  a {
+    @apply text-primary-500;
+  }
+  button {
+    @apply select-none;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium
+           transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-slate-200 hover:bg-slate-800;
+  }
+  .btn-outline {
+    @apply btn border border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800;
+  }
+  .card {
+    @apply rounded-xl border border-slate-800 bg-slate-900 p-4 shadow;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-pending {
+    @apply badge bg-slate-700 text-slate-200;
+  }
+  .badge-running {
+    @apply badge bg-amber-500/20 text-amber-300;
+  }
+  .badge-completed {
+    @apply badge bg-emerald-500/20 text-emerald-300;
+  }
+  .badge-failed {
+    @apply badge bg-rose-500/20 text-rose-300;
+  }
+}

@@ -1,0 +1,241 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+# Cancel in-progress runs for the same branch on a new push.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9.12.1"
+
+jobs:
+  # =====================================================================
+  # Frontend — apps/web
+  # =====================================================================
+  web-lint:
+    name: Web · Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  web-typecheck:
+    name: Web · Typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  web-test:
+    name: Web · Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+  # =====================================================================
+  # Backend — apps/api
+  # =====================================================================
+  api-lint:
+    name: API · Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.18"
+
+      - name: Sync deps
+        run: uv sync --project apps/api --no-install-project
+
+      - name: Ruff check
+        run: uv run --project apps/api ruff check apps/api
+
+      - name: Ruff format check
+        run: uv run --project apps/api ruff format --check apps/api
+
+  api-typecheck:
+    name: API · Mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.18"
+
+      - name: Sync deps
+        run: uv sync --project apps/api --no-install-project
+
+      - name: Mypy
+        run: uv run --project apps/api mypy apps/api/src
+
+  api-test:
+    name: API · Pytest
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: blocktool_test
+          POSTGRES_USER: blocktool
+          POSTGRES_PASSWORD: blocktool_test_pw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U blocktool -d blocktool_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://blocktool:blocktool_test_pw@localhost:5432/blocktool_test
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.4.18"
+
+      - name: Sync deps
+        run: uv sync --project apps/api --no-install-project
+
+      - name: Pytest
+        run: uv run --project apps/api pytest
+
+  # =====================================================================
+  # Docker build verification
+  # =====================================================================
+  docker-build:
+    name: Docker · Buildx (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-${{ matrix.target }}
+          key: ${{ runner.os }}-buildx-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-${{ matrix.target }}-
+
+      - name: Build (api)
+        if: matrix.target == 'api'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          tags: blocktool/${{ matrix.target }}:ci-${{ github.sha }}
+          load: true
+          cache-from: type=local,src=/tmp/.buildx-cache-${{ matrix.target }}
+          cache-to: type=local,dest=/tmp/.buildx-cache-${{ matrix.target }},mode=max
+
+      - name: Build (web)
+        if: matrix.target == 'web'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          tags: blocktool/${{ matrix.target }}:ci-${{ github.sha }}
+          load: true
+          cache-from: type=local,src=/tmp/.buildx-cache-${{ matrix.target }}
+          cache-to: type=local,dest=/tmp/.buildx-cache-${{ matrix.target }},mode=max

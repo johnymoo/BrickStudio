@@ -1,0 +1,139 @@
+# ============================================================
+# 节点 / 前端
+# ============================================================
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+.pnpmfile.cjs
+.yarn/
+
+# 构建产物
+apps/web/dist/
+apps/web/.vite/
+apps/web/coverage/
+apps/web/storybook-static/
+apps/api/dist/          # Python 一般不会到这里, 保留兜底
+packages/*/dist/
+
+# TypeScript
+*.tsbuildinfo
+
+# Vite / Vitest
+.vite/
+.vitest-cache/
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright_cache/
+htmlcov/
+.coverage
+.coverage.*
+.cache/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 构建 / 分发
+dist/
+build/
+*.egg
+
+# 3D 处理临时产物 (Meshroom / COLMAP / Open3D)
+apps/api/data/raw/
+apps/api/data/intermediate/
+apps/api/data/output/
+apps/api/data/cache/
+apps/api/data/temp/
+apps/api/.alembic_cache/
+
+# 任务 worker 心跳 / 临时文件
+*.pid
+*.sock
+
+# ============================================================
+# 环境变量 / Secret
+# ============================================================
+.env
+.env.local
+.env.*.local
+deploy/.env
+!.env.example
+!.env.*.example
+secrets/
+*.pem
+*.key
+*.crt
+
+# ============================================================
+# IDE / 编辑器
+# ============================================================
+.vscode/
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.cache/
+
+# ============================================================
+# 日志
+# ============================================================
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+uv-pip.log
+
+# ============================================================
+# 测试 / 覆盖度
+# ============================================================
+coverage/
+.nyc_output/
+junit.xml
+playwright-report/
+test-results/
+blob-report/
+
+# ============================================================
+# Docker / 数据持久化卷 (开发用)
+# ============================================================
+deploy/data/
+deploy/.volumes/
+
+# ============================================================
+# 操作系统
+# ============================================================
+.diskusage
+.Trash-*
+
+# ============================================================
+# 临时文件
+# ============================================================
+tmp/
+temp/
+.tmp/
+
+# ============================================================
+# Mavis / plan engine 状态 (不属于项目)
+# ============================================================
+.mavis/
+
+# ============================================================
+# Worker 给 owner 看的报告 (副本已在 .mavis/plans/)
+# ============================================================
+/deliverable.md

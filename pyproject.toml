@@ -1,0 +1,73 @@
+# pyproject.toml (root) — uv workspace for the backend.
+# Per design.md §4, package management (backend) is `uv` 0.4+.
+
+[project]
+name = "blocktool-monorepo"
+version = "0.1.0"
+description = "积木建模工具 monorepo root (uv workspace for Python backend)"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.uv.workspace]
+members = ["apps/api"]
+
+# Shared dev tooling — installed once at the workspace root so every member
+# can call `ruff` / `mypy` / `pytest` from a single environment.
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "types-requests>=2.32.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["**/node_modules/**", "**/dist/**", "**/build/**", ".venv/**"]
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "UP", # pyupgrade
+    "N",  # pep8-naming
+    "C4", # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RUF", # Ruff-specific rules
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # function call in default argument (FastAPI Depends pattern)
+    "N818",  # exception naming — our domain exceptions (CaptureInvalid, ...) deliberately drop the `Error` suffix
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "api", "core", "db", "models", "services", "workers", "pipelines", "storage"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+plugins = ["pydantic.mypy"]
+exclude = ["node_modules", "dist", "build", ".venv", "alembic"]
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "redis.*", "minio.*", "minio.error", "open3d.*", "trimesh.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["apps/api/tests"]
+python_files = ["test_*.py"]
+addopts = "-ra -q"

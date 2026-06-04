@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@features/*": ["./src/features/*"],
+      "@components/*": ["./src/components/*"],
+      "@lib/*": ["./src/lib/*"],
+      "@stores/*": ["./src/stores/*"]
+    },
+    "types": ["vite/client", "vite-plugin-pwa/client", "node"],
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "tailwind.config.ts",
+    "postcss.config.js",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ]
+}
