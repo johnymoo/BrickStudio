@@ -165,7 +165,18 @@ services:
       api:
         condition: service_healthy
     # The real entrypoint (celery worker) is wired in by the api-app task.
-    command: ["celery", "-A", "src.workers.celery_app", "worker", "--loglevel=info"]
+    # --pool=solo forces a single in-process worker (no fork). This avoids
+    # SIGSEGVs in Open3D / trimesh's native modules that happen when a
+    # prefork child touches inherited state after the parent has imported
+    # heavy native libs at boot.
+    command:
+      - celery
+      - -A
+      - src.workers.celery_app
+      - worker
+      - --loglevel=info
+      - --pool=solo
+      - --concurrency=1
     healthcheck:
       test:
         [
@@ -248,8 +259,9 @@ services:
         condition: service_healthy
     # The same image used by the API; we just swap the CMD to run alembic
     # once. The working directory inside the image is /app/apps/api, which
-    # is where alembic.ini lives.
-    command: ["alembic", "upgrade", "head"]
+    # is where alembic.ini lives. Use the absolute venv path because tini
+    # (the ENTRYPOINT) does not propagate PATH into execve reliably.
+    command: ["/app/apps/api/.venv/bin/alembic", "upgrade", "head"]
     restart: "no"
     healthcheck:
       # The container exits 0 on success and 1 on failure, so a normal

@@ -25,7 +25,7 @@ dependencies = [
     # / COLMAP_BIN 环境变量指向 host 上预装的 binary.
     # numpy / scipy / pillow 是 open3d 与 trimesh 的传递依赖,这里显式钉住
     # 下界避免 lockfile 抖动.
-    "open3d>=0.18.0",
+    "open3d==0.18.0",  # 钉到 0.18.0: 0.19.0 在 PyPI 官方 simple index 缺失 (only files.pythonhosted.org 直链可下), pip 解析不到, docker build 失败
     "trimesh>=4.4.0",
     "numpy>=1.26.0",
     "scipy>=1.13.0",

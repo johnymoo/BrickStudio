@@ -25,16 +25,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install uv (pinned; per design.md §4 backend package manager is uv 0.4+).
 COPY --from=ghcr.io/astral-sh/uv:0.4.18 /uv /uvx /usr/local/bin/
 
-WORKDIR /repo
+WORKDIR /app/apps/api
 
-# Copy the workspace manifests first for layer caching.
-COPY pyproject.toml uv.lock* ./
-COPY apps/api/pyproject.toml ./apps/api/
+# Force the venv into apps/api/.venv AND use a path that the runtime stage
+# will preserve (uv's workspace-mode default would put it at the workspace
+# root with a shebang that points back to that root, which the runtime stage
+# no longer has). Mirroring the runtime path keeps the shebang intact.
+ENV UV_PROJECT_ENVIRONMENT=/app/apps/api/.venv \
+    UV_LINK_MODE=copy
+
+# Copy the workspace manifests first for layer caching. The WORKDIR is
+# /app/apps/api so uv finds the right project, but we still need the workspace
+# root manifests on disk for resolution.
+COPY pyproject.toml uv.lock* /repo/
+COPY apps/api/pyproject.toml /repo/apps/api/
 
 # Install the api package (and dev tools) into a project-local .venv.
-# We export to a copyable dir so the runtime stage can pick it up.
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --project apps/api --no-install-project --no-dev
+    uv sync --project /repo/apps/api --no-install-project --no-dev
 
 # -----------------------------------------------------------------------------
 # Stage 2: minimal runtime image
@@ -44,12 +52,20 @@ FROM python:3.11-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    PYTHONPATH=/app/apps/api/src
 
-# System runtime deps only — no compilers here.
+# System runtime deps only — no compilers here. libgomp1 + libx11-6 are
+# required by Open3D at import time (OpenMP runtime + X11 loader for the
+# cpu.pybind extension). libgl1 + libglu1 are pulled in for any later
+# OffscreenRenderer fallback; harmless if unused.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libpq5 \
         libgeos-c1v5 \
+        libgomp1 \
+        libx11-6 \
+        libgl1 \
+        libglu1-mesa \
         curl \
         ca-certificates \
         tini \
@@ -63,7 +79,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:0.4.18 /uv /uvx /usr/local/bin/
 
 # Copy the prepared venv from the deps stage.
-COPY --from=deps /repo/apps/api/.venv /app/apps/api/.venv
+COPY --from=deps /app/apps/api/.venv /app/apps/api/.venv
 ENV PATH="/app/apps/api/.venv/bin:$PATH"
 
 # Copy the application source.
