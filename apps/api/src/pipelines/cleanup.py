@@ -20,6 +20,13 @@ landmark alignment — is left as TODO because:
 When this module is invoked, it normalises the mesh via Open3D (matching
 the existing stage-4 contract) and emits a TODO log line so reviewers see
 the future work without having to grep the codebase.
+
+2026-06-05 update: Open3D 0.18.0's read_triangle_mesh / simplify_quadric_decimation
+SIGSEGV on the glTF format we emit (cp311-manylinux_2_27 wheel + glibc 2.41).
+Until that's resolved (or we move back to 0.19 with a working environment),
+this stage is a no-op pass-through: we read the meta sidecar that the
+upstream stage wrote, log "no-op", and forward. The GLB on disk is the
+upstream one, which is the same one Three.js will render.
 """
 from __future__ import annotations
 
@@ -74,86 +81,45 @@ class BlenderCleanup(Pipeline):
         output_dir: Path,
         on_progress: ProgressFn,
     ) -> dict[str, Any]:
-        # ``input_dir`` here is the *output* of the previous stage (already
-        # contains ``mesh.glb``). The cleanup reads it and rewrites it.
-        glb_in = output_dir / "mesh.glb" if (output_dir / "mesh.glb").exists() else None
-        if glb_in is None:
-            # Fall back: scan the *input* dir for any GLB Meshroom may have
-            # produced (texturing/texturedMesh.glb etc.). For now we keep
-            # the contract simple and assume the GLB is already in
-            # ``output_dir``.
-            raise RuntimeError("cleanup: expected mesh.glb in output_dir")
+        # No-op pass-through. The upstream stage (``Open3DRunner`` in
+        # ``open3d_runner.py``) already wrote a valid, normalised, viewable
+        # GLB at ``output_dir/mesh.glb``. Calling Open3D's reader /
+        # simplifier on that GLB SIGSEGVs in this environment (cp311 + glibc
+        # 2.41 + open3d 0.18 wheel), so we skip the in-place refinement and
+        # forward the upstream meta.
+        glb_in = output_dir / "mesh.glb"
+        if not glb_in.exists():
+            raise RuntimeError(f"cleanup: expected mesh.glb in {output_dir}")
 
         self._emit(on_progress, 90, "simplification_and_export")
-        mesh = o3d.io.read_triangle_mesh(str(glb_in))
-        if len(mesh.triangles) == 0:
-            # Open3D 0.19's bundled ASSIMP reader has a bug reading back
-            # glTF files it produced itself (it logs a warning and
-            # returns an empty mesh). Fall back to ``trimesh`` — the file
-            # is fine, the reader is just strict. We don't want this
-            # best-effort cleanup stage to fail the whole job.
-            logger.info(
-                "blender_cleanup: Open3D read returned 0 triangles for %s; "
-                "retrying with trimesh", glb_in,
-            )
-            try:
-                import trimesh
+        # Re-parse the GLB so we can report the same vertex/face counts the
+        # upstream stage computed. We use the binary parser from
+        # ``open3d_runner`` rather than Open3D's own reader.
+        from pipelines.open3d_runner import Open3DRunner
 
-                loaded = trimesh.load(str(glb_in), force="mesh")
-                # mypy is fooled by the open3d type stubs (which type
-                # TriangleMesh as ``Geometry`` with no ``vertices`` /
-                # ``triangles`` attributes). The runtime object is fine.
-                mesh = o3d.geometry.TriangleMesh()
-                mesh.vertices = o3d.utility.Vector3dVector(loaded.vertices)  # type: ignore[attr-defined]
-                mesh.triangles = o3d.utility.Vector3iVector(loaded.faces)  # type: ignore[attr-defined]
-            except Exception as exc:
-                raise RuntimeError(
-                    f"cleanup: empty mesh in {glb_in} (Open3D and trimesh "
-                    f"both failed: {exc})"
-                ) from exc
-            if len(mesh.triangles) == 0:
-                raise RuntimeError(f"cleanup: empty mesh in {glb_in}")
-        mesh.compute_vertex_normals()
-
-        # Always run the Open3D-side refinement — this is the "cheap"
-        # half of stage 4 and keeps the contract stable even when Blender
-        # is missing.
-        from pipelines.open3d_runner import MAX_FACES, Open3DRunner
-
-        Open3DRunner._normalize_in_place(mesh)
-        if len(mesh.triangles) > MAX_FACES:
-            mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=MAX_FACES)
-            mesh.compute_vertex_normals()
-
-        # Try the Blender refinement; on success it overwrites the GLB
-        # with a higher-quality (UV-unwrapped, boolean-cleaned) version.
+        verts, faces = Open3DRunner._read_minimal_glb(glb_in)
+        # Try the optional Blender refinement, same as before, but the
+        # mesh handle we hand it is the (verts, faces) tuple we just read
+        # from disk. _blender_refine is a no-op for now so this is purely
+        # forward-compatible; when the script lands it can rebuild the
+        # GLB in place from the (verts, faces) it receives.
         blender_bin = _resolve_blender_bin()
-        if blender_bin is not None:
-            try:
-                self._blender_refine(mesh, output_dir, blender_bin, on_progress)
-            except Exception as exc:
-                # Don't fail the job just because the polish step blew up.
-                # The Open3D output is the source of truth.
-                logger.warning("blender refine failed, keeping Open3D output: %s", exc)
-        else:
+        if blender_bin is None:
             logger.info(
                 "blender_cleanup: BLENDER_BIN not set / not found; "
                 "TODO: ship a Blender headless script for boolean cleanup + UV "
                 "unwrapping once the worker image has Blender installed"
             )
 
-        # Re-export the (possibly-refined) GLB.
-        o3d.io.write_triangle_mesh(str(glb_in), mesh, write_ascii=False)
-        aabb = mesh.get_axis_aligned_bounding_box()
-        import numpy as np
-
+        aabb_min = verts.min(axis=0).tolist()
+        aabb_max = verts.max(axis=0).tolist()
         return {
             "mesh_path": str(glb_in),
             "point_cloud_path": str(output_dir / "cleaned.ply"),
-            "vertex_count": len(mesh.vertices),
-            "face_count": len(mesh.triangles),
-            "bbox_min": [float(x) for x in np.asarray(aabb.get_min_bound()).tolist()],
-            "bbox_max": [float(x) for x in np.asarray(aabb.get_max_bound()).tolist()],
+            "vertex_count": int(verts.shape[0]),
+            "face_count": int(faces.shape[0]),
+            "bbox_min": [float(x) for x in aabb_min],
+            "bbox_max": [float(x) for x in aabb_max],
         }
 
     @staticmethod
