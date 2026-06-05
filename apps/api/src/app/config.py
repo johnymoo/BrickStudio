@@ -105,6 +105,25 @@ class Settings(BaseSettings):
     environment: Literal["dev", "test", "staging", "prod"] = "dev"
     log_level: str = "INFO"
 
+    # ---- 3D reconstruction (phase 2) ---------------------------------------
+    colmap_bin: str | None = Field(
+        default=None,
+        description=(
+            "Override path to the COLMAP binary. When unset, the worker "
+            "falls back to `shutil.which('colmap')` and finally to the "
+            "Open3D multi-photo fallback."
+        ),
+    )
+    reconstruct_min_images_for_colmap: int = Field(
+        default=8,
+        ge=4,
+        description=(
+            "Minimum number of photos required to take the COLMAP path. "
+            "Below this we use the Open3D 4-7 photo fallback (synthetic "
+            "icosahedron). 8 is the design-phase2 default."
+        ),
+    )
+
     # ---- Celery ------------------------------------------------------------
     celery_broker_url: str | None = Field(
         default=None,

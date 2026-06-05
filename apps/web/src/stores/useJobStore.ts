@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { JobStatus } from "@lib/api";
+import type { CaptureMode, JobStatus } from "@lib/api";
 
 export interface JobRecord {
   id: string; // job id
@@ -14,6 +14,12 @@ export interface JobRecord {
   createdAt: string; // ISO
   updatedAt: string; // ISO
   imageCount: number;
+  /** Capture mode the user picked when creating this job. */
+  captureMode?: CaptureMode | null;
+  /** Optional ETA in seconds (updated on each SSE progress event). */
+  etaSeconds?: number | null;
+  /** Optional pipeline hint (colmap_sfm / open3d_fallback / open3d_pure_photogrammetry). */
+  pipelineUsed?: string | null;
 }
 
 export interface JobState {
@@ -21,6 +27,7 @@ export interface JobState {
   currentJobId: string | null;
   addJob: (job: JobRecord) => void;
   updateJob: (id: string, patch: Partial<JobRecord>) => void;
+  setJobCaptureMode: (id: string, mode: CaptureMode) => void;
   setCurrent: (id: string | null) => void;
   removeJob: (id: string) => void;
   clearAll: () => void;
@@ -52,6 +59,17 @@ export const useJobStore = create<JobState>()(
             jobs: {
               ...state.jobs,
               [id]: { ...existing, ...patch, updatedAt: new Date().toISOString() },
+            },
+          };
+        }),
+      setJobCaptureMode: (id, mode) =>
+        set((state) => {
+          const existing = state.jobs[id];
+          if (!existing) return state;
+          return {
+            jobs: {
+              ...state.jobs,
+              [id]: { ...existing, captureMode: mode, updatedAt: new Date().toISOString() },
             },
           };
         }),

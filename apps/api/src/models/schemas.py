@@ -33,6 +33,9 @@ class CaptureRead(BaseModel):
     created_at: datetime
     job_id: UUID | None = None
     image_keys: list[str] = Field(default_factory=list)
+    # Phase 2 (design-phase2.md §3.1): how the user captured the
+    # photos. Default ``phone_walkaround`` matches the design contract.
+    capture_mode: str = "phone_walkaround"
 
 
 # ---------------------------------------------------------------------------

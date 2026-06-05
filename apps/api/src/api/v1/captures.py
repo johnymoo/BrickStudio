@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, UploadFile, status
 from sqlalchemy import select
@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/captures", tags=["captures"])
 
+# Phase-2 contract (design-phase2.md §3.1): images between 4 and 20.
 MIN_IMAGES = 4
+MAX_IMAGES = 20
 ALLOWED_CONTENT_TYPES = {
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
@@ -27,6 +29,12 @@ ALLOWED_CONTENT_TYPES = {
     "image/webp": "webp",
     "image/heic": "heic",
 }
+
+#: Capture mode values. Stored verbatim in the capture row (phase 2 added
+#: a ``capture_mode`` column; default = ``phone_walkaround`` per the
+#: design-phase2.md §3.1 contract).
+CaptureMode = Literal["phone_walkaround", "studio_turntable", "quick_snapshot"]
+DEFAULT_CAPTURE_MODE: CaptureMode = "phone_walkaround"
 
 
 @router.post(
@@ -38,12 +46,24 @@ ALLOWED_CONTENT_TYPES = {
 async def create_capture(
     session: DBSessionDep,
     part_id: Annotated[str, Form(min_length=1, max_length=64)],
-    images: Annotated[list[UploadFile], File(description="At least 4 photos of the part.")],
+    images: Annotated[list[UploadFile], File(
+        description=(
+            f"Between {MIN_IMAGES} and {MAX_IMAGES} photos of the part. "
+            "8+ photos unlocks the COLMAP SfM path; 4-7 uses the "
+            "Open3D icosahedron fallback."
+        )
+    )],
+    capture_mode: Annotated[CaptureMode, Form()] = DEFAULT_CAPTURE_MODE,
 ) -> CaptureRead:
-    if len(images) < MIN_IMAGES:
+    n = len(images)
+    if n < MIN_IMAGES or n > MAX_IMAGES:
         raise CaptureInvalid(
-            f"need at least {MIN_IMAGES} images, got {len(images)}",
-            details={"image_count": len(images), "min": MIN_IMAGES},
+            f"need {MIN_IMAGES} <= image_count <= {MAX_IMAGES}, got {n}",
+            details={
+                "image_count": n,
+                "min": MIN_IMAGES,
+                "max": MAX_IMAGES,
+            },
         )
 
     capture_id = uuid.uuid4()
@@ -73,6 +93,7 @@ async def create_capture(
         status="pending",
         image_count=len(keys),
         image_keys=keys,
+        capture_mode=capture_mode,
     )
     session.add(capture)
 
@@ -98,8 +119,8 @@ async def create_capture(
     await session.refresh(capture)
 
     logger.info(
-        "captures.create: capture_id=%s part_id=%s images=%d job_id=%s",
-        capture_id, part_id, len(keys), job.id,
+        "captures.create: capture_id=%s part_id=%s images=%d mode=%s job_id=%s",
+        capture_id, part_id, len(keys), capture_mode, job.id,
     )
 
     return CaptureRead(
@@ -110,6 +131,7 @@ async def create_capture(
         created_at=capture.created_at,
         job_id=job.id,
         image_keys=capture.image_keys,
+        capture_mode=capture_mode,
     )
 
 
@@ -127,6 +149,7 @@ async def get_capture(capture_id: uuid.UUID, session: DBSessionDep) -> CaptureRe
         created_at=capture.created_at,
         job_id=job_id,
         image_keys=capture.image_keys,
+        capture_mode=getattr(capture, "capture_mode", DEFAULT_CAPTURE_MODE),
     )
 
 

@@ -55,3 +55,23 @@
     @apply badge bg-rose-500/20 text-rose-300;
   }
 }
+
+@layer utilities {
+  /* Brief 1s ring flash on stage change. The `ring-2` utility is applied
+     while `data-highlight="true"`; the animation fades the ring out so the
+     card doesn't stay highlighted. */
+  .stage-highlight {
+    animation: stage-flash 1.2s ease-out 1;
+  }
+  @keyframes stage-flash {
+    0% {
+      box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.55);
+    }
+    60% {
+      box-shadow: 0 0 0 6px rgba(14, 165, 233, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+    }
+  }
+}

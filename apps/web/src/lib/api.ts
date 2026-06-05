@@ -33,6 +33,10 @@ export interface JobInfo {
   started_at?: string | null;
   finished_at?: string | null;
   capture_id?: string;
+  /** Optional ETA in seconds (worker-estimated remaining time). */
+  eta_seconds?: number | null;
+  /** Pipeline used (colmap_sfm / open3d_fallback / open3d_pure_photogrammetry). */
+  pipeline_used?: string | null;
 }
 
 export interface AssetInfo {
@@ -108,12 +112,45 @@ async function parseResponse<T>(res: Response): Promise<T> {
 }
 
 /**
+ * Capture mode — controls the on-device guidance (number of angles, prompts)
+ * and tells the backend which reconstruction pipeline is most appropriate.
+ * Mirrors `docs/design-phase2.md` §4.1.
+ */
+export type CaptureMode = "phone_walkaround" | "studio_turntable" | "quick_snapshot";
+
+/** Recommended number of photos for each capture mode (frontend guidance). */
+export const CAPTURE_MODE_GUIDANCE: Record<CaptureMode, number> = {
+  phone_walkaround: 8,
+  studio_turntable: 12,
+  quick_snapshot: 4,
+};
+
+export const CAPTURE_MODE_LABELS: Record<CaptureMode, string> = {
+  phone_walkaround: "📱 围绕物体走",
+  studio_turntable: "🔄 转盘",
+  quick_snapshot: "📸 快速拍",
+};
+
+/**
  * Upload a multi-part capture (one or more image files) to the backend.
  *
  * @param formData - the multipart payload. Must include `part_id` and at
  *   least one `images` field. Caller is responsible for assembling this.
+ * @param captureMode - optional capture mode (forwarded as a form field).
+ *   Defaults to `quick_snapshot` server-side.
  */
-export async function createCapture(formData: FormData, signal?: AbortSignal): Promise<CaptureResponse> {
+export async function createCapture(
+  formData: FormData,
+  captureMode: CaptureMode | string = "quick_snapshot",
+  signal?: AbortSignal,
+): Promise<CaptureResponse> {
+  // Append the mode into the FormData. We mutate the caller's FormData so
+  // the call-site doesn't have to remember to wire it up separately. The
+  // request() helper below will skip setting Content-Type for FormData,
+  // letting the browser / undici set the multipart boundary automatically.
+  if (!formData.has("capture_mode")) {
+    formData.append("capture_mode", captureMode);
+  }
   return request<CaptureResponse>("/captures", { method: "POST", body: formData }, signal);
 }
 
@@ -129,9 +166,22 @@ export async function getAssetUrl(id: string, signal?: AbortSignal): Promise<Ass
   return request<AssetInfo>(`/assets/${encodeURIComponent(id)}`, { method: "GET" }, signal);
 }
 
+/** Reconstruction stage enum (mirrors `docs/design-phase2.md` §3.2). */
+export type JobStage =
+  | "collecting_photos"
+  | "downloading_images"
+  | "sparse_reconstruction"
+  | "dense_reconstruction"
+  | "point_cloud_cleaning"
+  | "mesh_reconstruction"
+  | "simplification_and_export"
+  | "completed"
+  | "failed"
+  | (string & {}); // forward-compat: backend may emit new stages
+
 export type JobStreamEvent =
-  | { type: "progress"; progress: number; stage?: string | null }
-  | { type: "stage_change"; stage: string }
+  | { type: "progress"; progress: number; stage?: JobStage | null; eta_seconds?: number | null }
+  | { type: "stage_change"; stage: JobStage; eta_seconds?: number | null }
   | { type: "completed"; result_asset_id?: string | null }
   | { type: "failed"; error: string }
   | { type: "open" }
@@ -159,16 +209,29 @@ export function subscribeJob(jobId: string, opts: SubscribeOptions): () => void 
       const data = JSON.parse((e as MessageEvent).data) as {
         progress: number;
         stage?: string | null;
+        eta_seconds?: number | null;
       };
-      opts.onEvent({ type: "progress", progress: data.progress, stage: data.stage });
+      opts.onEvent({
+        type: "progress",
+        progress: data.progress,
+        stage: (data.stage ?? null) as JobStage | null,
+        eta_seconds: data.eta_seconds ?? null,
+      });
     } catch (err) {
       opts.onEvent({ type: "error", message: (err as Error).message });
     }
   });
   es.addEventListener("stage_change", (e) => {
     try {
-      const data = JSON.parse((e as MessageEvent).data) as { stage: string };
-      opts.onEvent({ type: "stage_change", stage: data.stage });
+      const data = JSON.parse((e as MessageEvent).data) as {
+        stage: string;
+        eta_seconds?: number | null;
+      };
+      opts.onEvent({
+        type: "stage_change",
+        stage: data.stage as JobStage,
+        eta_seconds: data.eta_seconds ?? null,
+      });
     } catch (err) {
       opts.onEvent({ type: "error", message: (err as Error).message });
     }

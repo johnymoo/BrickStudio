@@ -34,6 +34,18 @@ class Capture(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     image_count: Mapped[int] = mapped_column(Integer, nullable=False)
     image_keys: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    # Phase 2 (design-phase2.md §3.1): enum in
+    # {phone_walkaround, studio_turntable, quick_snapshot}. The default
+    # is ``phone_walkaround`` (the design contract). For the very rare
+    # existing v0.1 rows that predate this column, the migration
+    # 0002 backfills them with ``phone_walkaround`` via the column
+    # ``server_default`` (Postgres applies the default on insert when
+    # the application does not specify a value).
+    capture_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False,
+        default="phone_walkaround",
+        server_default="phone_walkaround",
+    )
     created_at: Mapped[datetime] = make_created_at()
     updated_at: Mapped[datetime] = make_updated_at()
 

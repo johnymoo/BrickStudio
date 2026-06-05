@@ -46,10 +46,13 @@ from sqlalchemy import select, update
 from app.config import settings
 from db.models import Asset, Capture, Job
 from db.session import async_session_factory
-from pipelines import Pipeline, PipelineUnavailable
+from pipelines import PipelineUnavailable
 from pipelines.cleanup import BlenderCleanup
-from pipelines.colmap import ColmapPipeline
-from pipelines.meshroom import MeshroomPipeline
+from pipelines.colmap_runner import (
+    ColmapFailed,
+    ColmapRunner,
+    ColmapUnavailable,
+)
 from pipelines.open3d_runner import Open3DRunner
 from storage.minio_client import recon_object_key, storage
 from workers.celery_app import celery_app
@@ -265,16 +268,17 @@ def _run_pipeline(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- Stage 1: download images from MinIO -----------------------------
-    _emit_progress(self, job_id, progress=5, stage="downloading_images")
+    started = time.monotonic()
+    _emit_progress(self, job_id, progress=5, stage="downloading_images",
+                   eta_seconds=_eta_seconds(started, 5))
     _download_capture_photos(capture_uuid, input_dir)
     n_images = sum(1 for p in input_dir.iterdir() if p.is_file())
     if n_images == 0:
         raise RuntimeError(f"capture {capture_uuid} has no images in MinIO")
 
-    # ---- Stage 2: run the 3D pipeline (COLMAP → Meshroom → Open3D) ------
-    started = time.monotonic()
+    # ---- Stage 2: run the 3D pipeline (COLMAP → Open3D-multi → Open3D-fallback)
     pipeline_used, result = _select_and_run_pipeline(
-        self, job_id, input_dir, output_dir
+        self, job_id, input_dir, output_dir, n_images=n_images,
     )
     elapsed = time.monotonic() - started
     logger.info(
@@ -303,7 +307,8 @@ def _run_pipeline(
         result["blender_used"] = None
 
     # ---- Stage 4: upload GLB to MinIO ------------------------------------
-    _emit_progress(self, job_id, progress=95, stage="simplification_and_export")
+    _emit_progress(self, job_id, progress=95, stage="simplification_and_export",
+                   eta_seconds=_eta_seconds(started, 95))
     glb_path = Path(result["mesh_path"])
     if not glb_path.exists() or glb_path.stat().st_size == 0:
         raise RuntimeError(f"GLB missing or empty: {glb_path}")
@@ -348,7 +353,8 @@ def _run_pipeline(
     asyncio.run(_write_asset())
 
     # ---- Stage 6: final progress + completed event ----------------------
-    _emit_progress(self, job_id, progress=100, stage="completed")
+    _emit_progress(self, job_id, progress=100, stage="completed",
+                   eta_seconds=0)
     _publish_sync(
         job_id,
         {
@@ -380,11 +386,23 @@ def _emit_progress(
     stage: str,
     error_event: str | None = None,
     error: str | None = None,
+    eta_seconds: int | None = None,
 ) -> None:
-    """Single sink for *all* progress events: Celery state + DB + Redis pub/sub."""
+    """Single sink for *all* progress events: Celery state + DB + Redis pub/sub.
+
+    ``eta_seconds`` is best-effort: it lands in the Celery meta dict, the
+    Redis pub/sub payload, and the DB row. The brief says the frontend
+    uses it to render "完成还需约 Xs".
+    """
     import contextlib
 
-    meta = {"progress": progress, "stage": stage, "job_id": str(job_id)}
+    meta: dict[str, Any] = {
+        "progress": progress,
+        "stage": stage,
+        "job_id": str(job_id),
+    }
+    if eta_seconds is not None:
+        meta["eta_seconds"] = int(eta_seconds)
     if error:
         meta["error"] = error
     with contextlib.suppress(Exception):
@@ -397,10 +415,37 @@ def _emit_progress(
         "stage": stage,
         "ts": datetime.now(tz=UTC).isoformat(),
     }
+    if eta_seconds is not None:
+        payload["eta_seconds"] = int(eta_seconds)
     if error:
         payload["error"] = error
     _publish_sync(job_id, payload)
     _run_async(_set_job_progress(job_id, progress=progress, stage=stage))
+
+
+#: Threshold below which we don't emit eta_seconds (the math is too
+#: unstable — early on, a 1% jump can move ETA by 10x).
+_ETA_MIN_PROGRESS_PCT = 5
+
+
+def _eta_seconds(started: float, progress_pct: int) -> int | None:
+    """Estimate remaining seconds from a job-level ``started`` timestamp.
+
+    Returns ``None`` if we don't have enough data to estimate yet
+    (i.e. progress < 5 % or zero elapsed), otherwise a non-negative
+    integer clamped at 1 hour so a stuck job doesn't render "ETA 999h".
+    """
+    if progress_pct <= _ETA_MIN_PROGRESS_PCT:
+        return None
+    elapsed = time.monotonic() - started
+    if elapsed <= 0:
+        return None
+    remaining_pct = max(0, 100 - progress_pct)
+    eta = int(elapsed * remaining_pct / progress_pct)
+    # Clamp at 1h so a wedged pipeline doesn't show a "10h" badge in
+    # the front-end for hours. (Real jobs are 10-60s in the design
+    # doc; if a job is > 1h, operator should be looking at it.)
+    return min(3600, max(0, eta))
 
 
 def _progress_cb(
@@ -424,54 +469,79 @@ def _select_and_run_pipeline(
     job_id: uuid.UUID,
     input_dir: Path,
     output_dir: Path,
+    *,
+    n_images: int,
 ) -> tuple[str, dict[str, Any]]:
-    """Try the heavy SfM pipelines first, fall back to Open3D-only.
+    """Route the job to the right reconstruction path.
 
-    Returns ``(pipeline_name, result_dict)``. Any
-    :class:`PipelineUnavailable` from a heavyweight pipeline is caught
-    and we move to the next option. The fallback Open3D path itself
-    cannot raise ``PipelineUnavailable`` (it has no external binary) so
-    if we get back from this function the call always succeeded.
+    Routing rules (design-phase2.md §3.3):
+
+    * ``n_images >= 8`` and COLMAP binary present:
+      try :class:`ColmapRunner`. On :class:`ColmapUnavailable` /
+      :class:`ColmapFailed`, fall through to Open3D multi-photo.
+    * ``n_images >= 8`` (COLMAP not present OR failed above):
+      :class:`Open3DRunner.reconstruct_from_photos_multi`.
+    * ``4 <= n_images < 8``: :class:`Open3DRunner.reconstruct_from_photos`
+      (phase-1 icosahedron fallback, no SfM).
+
+    Returns ``(pipeline_name, result_dict)``. The Open3D paths cannot
+    raise — they always return a deterministic GLB. The COLMAP path
+    may raise :class:`ColmapUnavailable` / :class:`ColmapFailed`; both
+    are caught and routed to the multi-photo path.
+
+    ``pipeline_used`` values written to asset ``meta``:
+    * ``"colmap_sfm"`` — real COLMAP path produced the GLB.
+    * ``"open3d_pure_photogrammetry"`` — 8+ photos but no COLMAP
+      available / COLMAP failed.
+    * ``"open3d_fallback"`` — 4-7 photos, phase-1 icosahedron.
     """
-    last_exc: Exception | None = None
-    # Order matches design.md §8: COLMAP (most accurate) → Meshroom
-    # (AliceVision) → Open3D-only (no SfM, synthetic point cloud).
-    candidates: list[Pipeline] = [
-        ColmapPipeline(),
-        MeshroomPipeline(),
-    ]
-    for pipeline in candidates:
+    min_for_colmap = settings.reconstruct_min_images_for_colmap
+    runner = Open3DRunner()
+
+    # ---- 1. Try COLMAP if we have enough photos --------------------------
+    if n_images >= min_for_colmap:
         try:
             _emit_progress(
                 self, job_id, progress=10, stage="sparse_reconstruction",
             )
-            result = pipeline.run(
+            colmap = ColmapRunner(min_images=min_for_colmap)
+            result = colmap.reconstruct(
                 input_dir=input_dir,
                 output_dir=output_dir,
-                on_progress=_progress_cb(self, job_id, base=10, span=80),
+                on_progress=_progress_cb(self, job_id, base=10, span=85),
             )
-            return pipeline.name, result
-        except PipelineUnavailable as exc:
-            logger.info("pipeline %s unavailable: %s", pipeline.name, exc)
-            last_exc = exc
-            continue
-        except Exception as exc:
-            # Real algorithm failure on a heavyweight pipeline: try the
-            # fallback. The fallback is documented to be best-effort, so
-            # we'd rather produce *something* than nothing.
+            return colmap.name, result
+        except ColmapUnavailable as exc:
+            logger.info(
+                "reconstruct: COLMAP unavailable (%s); "
+                "falling back to Open3D multi-photo", exc,
+            )
+        except ColmapFailed as exc:
             logger.warning(
-                "pipeline %s crashed (%s); falling back to Open3D-only", pipeline.name, exc
+                "reconstruct: COLMAP failed (%s); "
+                "falling back to Open3D multi-photo", exc,
             )
-            last_exc = exc
-            continue
+        except Exception as exc:
+            logger.warning(
+                "reconstruct: COLMAP runner crashed (%s); "
+                "falling back to Open3D multi-photo", exc,
+            )
 
-    # Open3D-only path: never raises PipelineUnavailable because it
-    # doesn't shell out to anything.
-    logger.info(
-        "reconstruct: using Open3D-only fallback (last_exc=%s)", last_exc,
-    )
+        # 8+ photos but no COLMAP (or it failed) → Open3D multi-photo.
+        logger.info("reconstruct: using Open3D multi-photo path (n_images=%d)", n_images)
+        _emit_progress(self, job_id, progress=15, stage="sparse_reconstruction")
+        result = runner.reconstruct_from_photos_multi(
+            input_dir=input_dir,
+            output_dir=output_dir,
+            on_progress=_progress_cb(self, job_id, base=15, span=80),
+            image_count=n_images,
+        )
+        result["pipeline_version"] = Open3DRunner.__module__.rsplit(".", 1)[-1]
+        return "open3d_pure_photogrammetry", result
+
+    # ---- 2. 4-7 photos: phase-1 icosahedron fallback ---------------------
+    logger.info("reconstruct: using Open3D 4-7 photo fallback (n_images=%d)", n_images)
     _emit_progress(self, job_id, progress=15, stage="sparse_reconstruction")
-    runner = Open3DRunner()
     result = runner.reconstruct_from_photos(
         input_dir=input_dir,
         output_dir=output_dir,
