@@ -1,0 +1,94 @@
+# 积木建模工具 — 路线图 (v0.1 → v0.4)
+
+> 项目代号 **BrickStudio**。本文件维护"接下来要做什么、做到什么程度算完"。
+
+## 状态总览
+
+| 阶段 | 状态 | 产物 | commit |
+|---|---|---|---|
+| v0.1 基础后端 | ✅ 已发布 | FastAPI + PostgreSQL + MinIO + Celery 骨架, 12/12 测试 | `e34a8b4` |
+| v0.2 拍照 UX + SfM 重建 | ✅ 已发布 | 智能拍照 N 张, COLMAP docker 集成, Open3D fallback ≥8 张, Playwright E2E | `cb94a76` |
+| v0.3 参数化建模 (进行中) | 🟡 demo 通 | BlockGenerator 16/16 GLB (4 kind × 2 system × 2 size), 13 张真照片 baseline, Delaunay fallback | 未提交 |
+| v0.4 BlockGenerator 集成 + 后续 | ⏳ 待办 | 见下文 §3 | — |
+
+## 1. v0.1 基础后端 (✅)
+
+FastAPI / SQLAlchemy 2 async / asyncpg / Pydantic 2 / Celery 5 / MinIO。
+
+- 端点: `POST /api/v1/captures`, `GET /api/v1/captures/{id}`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/stream` (SSE), `GET /api/v1/assets/{id}`。
+- 表: `captures` / `jobs` / `assets` 三张 + alembic 迁移。
+- 12/12 单测全过, `deliverable.md` 冻结。
+
+## 2. v0.2 拍照 UX + SfM 重建 (✅)
+
+冻结于 `docs/design-phase2.md`。关键变化:
+
+- `POST /captures` 接收 **4-20 张** jpg/webp/heic, `capture_mode` 枚举。
+- Celery 任务五阶段 progress (collecting_photos → sparse_reconstruction → dense_reconstruction → cleanup → upload), 前端 SSE 实时同步。
+- COLMAP docker 优先; 没装就跑 Open3D-only fallback (≥8 张走 Delaunay 凸包)。
+- Playwright E2E 用真照片 fixture 跑全链路, 8-photo run 截图在 `tests/e2e/screenshots/`。
+
+**实测遇到的坑** (写在这里避免后面再踩):
+
+- macOS Open3D 0.18.0 Poisson / Ball-Pivoting 在 glibc 2.36+ 上 SIGSEGV — 改用 scipy Delaunay 凸包 (10 行代码), watertight + 5KB+ 满足。
+- COLMAP incremental mapper 在 Osmo 纯旋转环绕 + DUPLO 简单纹理上 register 只到 2 张图, 重建退化到 34 点的菱形凸包 — 因此走参数化路线。
+- HEIC 不能直接给 PIL, 需要 `pillow-heif` 注册 decoder (后端在 Mac 上可以, docker 镜像要补一行 apt)。
+
+## 3. v0.3 参数化建模 (🟡 demo 通, 待集成)
+
+**核心想法**: DUPLO / LEGO 是公开规格, 4 个核心比例 + grid spacing 就能 scale 出所有变体, SfM 没必要。照片只用作"实物对比验证", 不是反推尺寸的数据源。
+
+**已完成** (v0.3 demo):
+
+- `apps/api/src/services/block_generator.py` — `BlockSpec` dataclass + `generate()` + `export_glb()`, 4 kind (brick/plate/tile/slope) × 2 system (duplo/lego) × N size (1x1 / 2x2 / 2x4 验证过) = **16 GLB 全过 5KB + 全 watertight**。
+- 13 张真照片 baseline: 9.5KB GLB (243v/482f), 单图 4 张 baseline 24KB GLB。
+- `test_reconstruction.py` 6/6 全过, `pipeline_used` 集合扩到 5 个值。
+- `open3d_runner.py` 接 scipy Delaunay 路径绕开 mac SIGSEGV。
+- 13 张真照片**不进 git** (21MB), 走 `tests/e2e/fixtures/real-photos/.gitignore` + 本地 README。pytest 用 `synth_cube` 合成图, 不依赖真照片。
+
+**BlockGenerator 公开规格** (LEGO.com product specs, ±0.1mm):
+
+| 维度 | LEGO | DUPLO |
+|---|---|---|
+| 节距 (unit) | 8.0 mm | 20.0 mm |
+| 凸点直径 (knob Ø) | 4.8 mm | 16.0 mm |
+| 凸点高度 (knob h) | 1.7 mm | 7.0 mm |
+| 砖块高度 (brick) | 9.6 mm | 17.0 mm |
+| 板高度 (plate) | 3.2 mm (= brick/3) | 6.0 mm |
+| 内壁直径 (tube Ø) | 6.2 mm | 12.0 mm |
+| 内壁深度 (tube h) | 8.4 mm | 14.0 mm |
+| 楔形 (slope) | 45°, 沿 X 方向降低 | 45°, 沿 X 方向降低 |
+
+任意 size (units_x × units_y) 都能从以上常量直接 `export_glb()`。
+
+**待办**:
+
+- [ ] BlockGenerator 集成方式: API endpoint / worker routing / 客户端手填 (3 选 1, 倾向 worker routing)
+- [ ] `workers/tasks/reconstruct.py` 加 `parametric_block` 分支 (~540/552 行附近)
+- [ ] `test_reconstruction.py` 加 `test_parametric_block_pipeline` 用例
+- [ ] 选 5-10 个实物 brick 拍 4 视角照片, 跟生成 GLB 并排渲染做 spec 验证
+- [ ] (可选) `tube=True` 走 manifold3d boolean cut, 真正的 anti-stud 空心
+
+## 4. v0.4 后续开发计划
+
+按 `docs/design.md` 阶段 4/5 + 用户在新功能上的优先级, 暂列:
+
+| 优先级 | 功能 | 复杂度 | 备注 |
+|---|---|---|---|
+| P0 | BlockGenerator API 集成 | 低 | 上一节待办, 解锁"用户拿 GLB 不走相机" |
+| P0 | 真照片 → 生成 GLB 并排渲染对比 | 中 | spec 验证的视觉产物, 给用户看"模型对不对" |
+| P1 | 零件库 CRUD (Part / Variant / Color) | 中 | 用户存自己的 brick 库, 跨 capture 复用 |
+| P1 | 网格手动编辑 (R3F) | 中-高 | design §5.3 范围, 复杂 |
+| P2 | 拼搭规则引擎 | 高 | 接触面匹配 / 卡扣力 / 稳定性分析 |
+| P2 | AI 灵感生成 (text → assembly) | 高 | 依赖 v0.4 数据 |
+| P3 | 多用户 / 协作 | 高 | 看用户规模决定 |
+
+**当前最该做的** (用户原话): 完成 v0.3 集成 + v0.4 视觉对比, 然后接 P1 零件库。
+
+## 5. 文档地图
+
+- `docs/design.md` — 总体设计 (阶段一契约)
+- `docs/design-phase2.md` — 阶段二契约 (拍照 UX + SfM)
+- `docs/capture-procedure.md` — 采集流程示意图 (本批工作)
+- `deliverable.md` / `apps/api/deliverable-pipeline.md` / `apps/web/deliverable.md` — 阶段交付物
+- `apps/api/README.md` / `apps/web/README.md` — 模块自述
