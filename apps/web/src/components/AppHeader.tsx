@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 export function AppHeader() {
   const { pathname } = useLocation();
   const isCapture = pathname.startsWith("/capture");
+  const isParametric = pathname.startsWith("/parametric");
   return (
     <header className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/85 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between">
@@ -17,11 +18,22 @@ export function AppHeader() {
           </span>
           <span className="text-base font-semibold">积木工具</span>
         </Link>
-        {!isCapture && (
-          <Link to="/capture" className="btn-primary text-sm">
-            开始新的采集
-          </Link>
-        )}
+        <nav className="flex items-center gap-2">
+          {!isParametric ? (
+            <Link
+              to="/parametric"
+              className="btn-ghost text-sm"
+              data-testid="header-parametric-link"
+            >
+              📐 建模
+            </Link>
+          ) : null}
+          {!isCapture ? (
+            <Link to="/capture" className="btn-primary text-sm">
+              开始新的采集
+            </Link>
+          ) : null}
+        </nav>
       </div>
     </header>
   );

@@ -74,7 +74,13 @@ function isApiError(value: unknown): value is ApiError {
   );
 }
 
-async function request<T>(
+/**
+ * Low-level request helper exposed for feature modules that need to hit a
+ * bespoke endpoint not yet wrapped by a typed helper (e.g. the parametric
+ * wizard). Prefer the typed helpers above (`createCapture`, `getJob`, …)
+ * for the common paths.
+ */
+export async function request<T>(
   path: string,
   init: RequestInit = {},
   signal?: AbortSignal,
