@@ -272,7 +272,15 @@ def test_reconstruct_task_end_to_end(
     assert asset.meta["face_count"] > 0
     # The brief allows any of colmap / meshroom / open3d_fallback; on CI
     # machines without binaries, the fallback is the only one reachable.
-    assert asset.meta["pipeline_used"] in {"colmap", "meshroom", "open3d_fallback"}
+    # Multi-photo path uses ``open3d_pure_photogrammetry`` (8+ photos,
+    # no COLMAP binary present).
+    assert asset.meta["pipeline_used"] in {
+        "colmap",
+        "colmap_sfm",
+        "meshroom",
+        "open3d_fallback",
+        "open3d_pure_photogrammetry",
+    }
 
     # ---- Assert GLB is downloadable ------------------------------------
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:

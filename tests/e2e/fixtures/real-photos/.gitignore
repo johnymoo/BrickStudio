@@ -1,0 +1,15 @@
+# Ignore all real-photo binaries — they don't ship with the repo.
+# Real photos are kept locally for manual pipeline runs / spec
+# validation. CI tests use the synthetic cube fixture instead.
+*.JPG
+*.jpg
+*.JPEG
+*.jpeg
+*.HEIC
+*.heic
+*.PNG
+*.png
+
+# But keep this README and the .gitignore themselves
+!.gitignore
+!README.md
