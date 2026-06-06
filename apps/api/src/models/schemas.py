@@ -1,8 +1,9 @@
 """Pydantic v2 request/response schemas (the "models" layer in design.md §5)."""
+
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -64,7 +65,7 @@ class JobRead(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def model_validate(cls, obj: Any, *args: Any, **kwargs: Any) -> "JobRead":
+    def model_validate(cls, obj: Any, *args: Any, **kwargs: Any) -> JobRead:
         """Materialise ``result_asset_id`` from the assets relationship.
 
         The Job ORM has an ``assets`` collection (one-to-many). The
@@ -92,6 +93,89 @@ class JobRead(BaseModel):
                     "updated_at": obj.updated_at,
                 }
         return super().model_validate(obj, *args, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Parametric block (v0.3+, capture-procedure.md / ROADMAP.md §v0.3)
+# ---------------------------------------------------------------------------
+# The 5 caliper-friendly fields. Matches ``tools/measure_block.py``'s
+# ``raw_measurements_mm`` shape verbatim — the worker just feeds them
+# through ``derive_spec_from_raw`` (re-used via tools.measure_block, or
+# inlined into the worker) to populate the 4 ``BlockSpec`` overrides.
+#
+# All values are positive millimetres; the worker cross-checks
+# (1A > 1B, ④ > ②, |③ - (1A - 1B)/2| < 0.5 mm) and stores the warnings
+# in ``capture.cross_check_warnings``.
+_RAW_MEASUREMENT_KEYS: tuple[str, ...] = (
+    "outer_pitch_mm",
+    "inner_pitch_mm",
+    "stud_diameter_mm",
+    "brick_height_net_mm",
+    "brick_height_total_mm",
+)
+
+
+class ParametricBlockRequest(BaseModel):
+    """Request body for ``POST /api/v1/parametric-blocks``.
+
+    The HTTP layer accepts these as ``Form()`` fields, not as a JSON
+    body — multipart is the only way to also accept optional
+    reference photos. This model exists so the field shape is
+    documented and testable in isolation (e.g. unit tests of the
+    worker spec-derivation logic).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: One of ``"duplo"`` / ``"lego"`` / ``"feile"`` / ``"generic"``.
+    #: ``"generic"`` requires explicit ``unit_mm`` etc. (worker will
+    #: error out if those are missing).
+    system: Literal["duplo", "lego", "feile", "generic"] = "duplo"
+    #: One of ``"brick"`` / ``"plate"`` / ``"tile"`` / ``"slope"``.
+    kind: Literal["brick", "plate", "tile", "slope"] = "brick"
+    #: Stud-grid dimensions in units. Positive ints; 1..16 covers the
+    #: whole 1x1..16x16 range we render in v0.3.
+    units_x: int = Field(default=2, ge=1, le=16)
+    units_y: int = Field(default=2, ge=1, le=16)
+    #: 5 caliper-friendly measurements in mm. Each must be > 0.
+    raw_measurements_mm: dict[str, float]
+
+
+class ParametricBlockRead(BaseModel):
+    """Response shape for ``POST /api/v1/parametric-blocks``.
+
+    Mirrors :class:`CaptureRead` for the parametric path: the user
+    gets back a ``capture_id`` (the DB row) and a ``job_id`` (the
+    Celery task that builds the GLB). ``status`` is always
+    ``"pending"`` on the 201 — the GLB lands in MinIO within ~1s
+    (the worker is in-process fast for parametric, no SfM).
+    """
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    capture_id: UUID = Field(validation_alias="id")
+    part_id: str
+    status: str
+    #: Always ``"parametric_block"`` on this endpoint.
+    mode: str = "parametric_block"
+    system: str
+    kind: str
+    units_x: int
+    units_y: int
+    #: Verbatim from the form field — preserved so the worker can
+    #: re-derive the spec on retry.
+    raw_measurements_mm: dict[str, float]
+    #: 4 spec values pre-derived by the route layer
+    #: (``unit_mm`` / ``height_mm`` / ``knob_diameter_mm`` /
+    #: ``knob_height_mm``). The worker re-derives from
+    #: ``raw_measurements_mm`` for safety; this field is informational.
+    derived_spec_mm: dict[str, float] | None = None
+    #: Cross-check warnings (empty list = clean). The route layer
+    #: runs the same checks as ``tools/measure_block.cross_check_raw``
+    #: and persists the result.
+    cross_check_warnings: list[str] = Field(default_factory=list)
+    job_id: UUID | None = None
+    created_at: datetime
 
 
 # ---------------------------------------------------------------------------
@@ -151,4 +235,6 @@ __all__ = [
     "ErrorEnvelope",
     "HealthRead",
     "JobRead",
+    "ParametricBlockRead",
+    "ParametricBlockRequest",
 ]
