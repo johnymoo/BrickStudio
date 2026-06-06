@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1020" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+  <defs>
+    <marker id="arrow-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f172a"/>
+    </marker>
+    <marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 10 0 L 0 5 L 0 10 z" fill="#0f172a"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="550" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">
+    卡尺测量示意 — 斜面 (slope) 5 个原始测量
+  </text>
+  <text x="550" y="54" text-anchor="middle" font-size="12" fill="#64748b">
+    楔形几何: 高边 (x=0) 净高 = brick 净高, 低边 (x=width) 净高 = 0; 凸点仅在高边 (units_y 个)
+  </text>
+
+  <!-- ============== Subplot 1: 顶视 (slope_length, slope_depth, stud_Ø) ============== -->
+  <rect x="40" y="80" width="500" height="380" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="290" y="105" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">顶视 (slope_length, slope_depth, ③ stud_Ø)</text>
+
+  <!-- Slope 40x40 mm, top view: rectangle, scale 5 px/mm, center (290, 280). Range x 190-390, y 180-380.
+       Knobs ONLY along the high edge (x=0 in object space, but rendered as the LEFT side
+       of the top-view rectangle, x=190 px). 2 knobs at depth Y=±10 mm from center. -->
+  <rect x="190" y="180" width="200" height="200" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- High edge callout (left side) -->
+  <line x1="190" y1="170" x2="190" y2="390" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <text x="190" y="160" text-anchor="middle" font-size="11" font-weight="700" fill="#dc2626">高边 (x=0)</text>
+  <text x="390" y="160" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">低边 (x=width, 净高=0)</text>
+  <!-- 2 knobs along the high edge (units_y = 2) -->
+  <circle cx="190" cy="230" r="40" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <circle cx="190" cy="330" r="40" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+
+  <!-- slope_length: brick total X length (40 mm) -->
+  <line x1="180" y1="120" x2="380" y2="120" stroke="#0f172a" stroke-width="1.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="280" y="113" text-anchor="middle" font-size="10" fill="#0f172a">40.0</text>
+  <text x="280" y="100" text-anchor="middle" font-size="9" fill="#475569">= units_x × unit (2 × 20.0)</text>
+  <line x1="60" y1="100" x2="180" y2="120" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="48" cy="100" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="48" y="105" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1A'</text>
+
+  <!-- slope_depth: brick Y depth (40 mm, but on slope it's still units_y × unit since 凸点 are along Y) -->
+  <line x1="408" y1="180" x2="408" y2="380" stroke="#0f172a" stroke-width="1.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="420" y="285" text-anchor="start" font-size="10" fill="#0f172a">40.0</text>
+  <text x="420" y="299" text-anchor="start" font-size="9" fill="#475569">= units_y × unit (2 × 20.0)</text>
+  <line x1="408" y1="380" x2="445" y2="395" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="455" cy="400" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="455" y="405" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1B'</text>
+
+  <!-- stud_Ø: across knob 2 -->
+  <line x1="160" y1="330" x2="220" y2="330" stroke="#0f172a" stroke-width="1.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="190" y="324" text-anchor="middle" font-size="10" fill="#0f172a">Ø16.0</text>
+  <line x1="60" y1="395" x2="160" y2="335" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="48" cy="400" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="48" y="405" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">3</text>
+
+  <text x="290" y="425" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">凸点**只在高边**, 跟 brick 不同: 1B' 是 Y 方向总深度, 不是 stud 空隙</text>
+  <text x="290" y="441" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">(slope 没有"内径距"概念, 改用 slope_depth 量 Y 方向)</text>
+
+  <!-- ============== Subplot 2: 前视 (高边 ② 净高, 高边 ④ 总高, 低边 = 0) ============== -->
+  <rect x="560" y="80" width="500" height="380" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="810" y="105" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">前视 (高边 ②, 高边 ④, 低边 = 0)</text>
+
+  <!-- Slope wedge: scale 5 px/mm, base 40 mm wide (x: 710-910), peak 17 mm high at x=710 (left).
+       Y axis vertical. Knob centered at x=710, y=85 (above peak). -->
+  <!-- Bottom edge (z=0) -->
+  <line x1="710" y1="350" x2="910" y2="350" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- Wedge: peak (710, 245) → 17mm above bottom (350-17*5 = 265). Actually: bottom 350, height 17*5=85, peak y=265 -->
+  <!-- Left wall (x=710, full height) -->
+  <line x1="710" y1="350" x2="710" y2="265" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- Slanted top: (710, 265) → (910, 350) -->
+  <line x1="710" y1="265" x2="910" y2="350" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- Fill triangle -->
+  <polygon points="710,350 910,350 710,265" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- Knob on top of high edge: half-circle at center (710, 265), radius 40, top half above -->
+  <path d="M 670 265 A 40 40 0 0 1 750 265 Z" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+
+  <!-- High-edge labels -->
+  <text x="710" y="240" text-anchor="middle" font-size="10" font-weight="700" fill="#dc2626">高边 (x=0)</text>
+  <text x="910" y="380" text-anchor="middle" font-size="10" font-weight="700" fill="#0f172a">低边 (x=width, 净高=0)</text>
+
+  <!-- ② slope_height_high: 高边净高 (底 → 顶, 不含凸点) = 17.0 mm -->
+  <line x1="685" y1="350" x2="685" y2="265" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="680" y="312" text-anchor="end" font-size="10" fill="#0f172a">17.0</text>
+  <line x1="648" y1="305" x2="682" y2="305" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="635" cy="305" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="635" y="310" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2'</text>
+
+  <!-- ④ slope_height_total_high: 高边总高 (底 → 凸点顶, 含凸点) = 17+7=24.0 mm -->
+  <line x1="710" y1="350" x2="710" y2="225" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="725" y="290" font-size="10" fill="#0f172a">24.0</text>
+  <text x="725" y="302" font-size="9" fill="#475569">= 17.0 + 7.0</text>
+  <line x1="745" y1="270" x2="757" y2="270" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="770" cy="270" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="770" y="275" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">4'</text>
+
+  <!-- Low edge annotation: net = 0, derived not measured -->
+  <line x1="930" y1="350" x2="930" y2="350" stroke="#0f172a" stroke-width="3"/>
+  <text x="935" y="375" font-size="10" fill="#475569" font-style="italic">低边净高 = 0 (45° 楔形, 派生)</text>
+  <text x="935" y="390" font-size="10" fill="#475569" font-style="italic">knob_h = ④' - ②'</text>
+
+  <text x="810" y="425" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">②': 卡尺卡砖底 → 高边顶 (不含凸点)</text>
+  <text x="810" y="441" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">④': 卡尺卡砖底 → 高边凸点顶 (含凸点)</text>
+
+  <!-- ============== Subplot 3: 立体总览 (slope 形状) ============== -->
+  <rect x="40" y="480" width="500" height="420" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="290" y="505" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">立体总览 (5 个测量在 3D 上的位置)</text>
+
+  <!-- iso slope: scale 3.5 px/mm, base center (290, 800), peak at left edge.
+       Base 40mm wide × 40mm deep, peak 17mm high. iso angle 30°.
+       X right (low edge), Y back, Z up. -->
+  <!-- Base rectangle (z=0): 4 corners -->
+  <!-- 700,720 base-left; 840,720 base-right (40mm × 3.5px = 140px, but iso skew adds 60px for Y depth) -->
+  <!-- Using a 3D-projected wedge: bottom-back-left (BL), bottom-back-right (BR), bottom-front-right (FR), bottom-front-left (FL),
+       top-back-left (P_back), top-front-left (P_front).
+       iso projection: x' = x*cos(30) - y*cos(30); y' = y*sin(30) - z; for our viewer, simpler to just draw 3 visible faces. -->
+  <!-- Let base center (290, 800), bottom rect 140×140 px (40mm × 3.5 px/mm), iso skew 30°. -->
+  <!-- Bottom face: 4 corners, iso projection of (0,0,0) (40,0,0) (40,40,0) (0,40,0) -->
+  <!-- cos(30) = 0.866, sin(30) = 0.5 -->
+  <!-- (0,0,0)  → (0, 0) → (290, 800) -->
+  <!-- (40,0,0) → (40*3.5*0.866, 0) = (121.2, 0) → (411.2, 800) -->
+  <!-- (40,40,0)→ (40*3.5*0.866 - 40*3.5*0.866, 40*3.5*0.5) = (0, 70) → (290, 870) -->
+  <!-- (0,40,0) → (-40*3.5*0.866, 40*3.5*0.5) = (-121.2, 70) → (168.8, 870) -->
+  <!-- Peak (left high edge): (0,0,17) and (0,40,17) -->
+  <!-- (0,0,17) → (0, -17*3.5) = (0, -59.5) → (290, 740.5) -->
+  <!-- (0,40,17)→ (-121.2, 70-59.5) = (-121.2, 10.5) → (168.8, 810.5) -->
+
+  <!-- Right (low) face: BR (411.2,800) → FR (290,870) → FP (168.8,810.5) → BP (168.8,810.5)? No, low edge has no peak. -->
+  <!-- The slanted top face: from high edge (290, 740.5) and (168.8, 810.5) down to low edge corners (411.2, 800) and (290, 870). -->
+  <!-- Front (low) face: a triangle on the low-side, from peak-front (168.8, 810.5) down to FL (168.8, 870) and FR (290, 870). That's NOT a triangle in 3D; let me re-think. -->
+  <!-- Actually, slope wedge has 5 faces: bottom (rect), back wall (rect, y=0), front wall (rect, y=40), high wall (rect, x=0), slanted top (rect). Low edge (x=40) has zero height so it's a single line. -->
+  <!-- Visible from iso angle: bottom, high wall, slanted top, front wall. -->
+
+  <!-- Bottom face: BL(290,800) BR(411.2,800) FR(290,870) FL(168.8,870) -->
+  <polygon points="290,800 411.2,800 290,870 168.8,870" fill="#bfdbfe" stroke="#1e3a8a" stroke-width="1.2"/>
+
+  <!-- High wall: BL(290,800) FL(168.8,870) FP(168.8,810.5) BP(290,740.5). Quad. -->
+  <polygon points="290,800 168.8,870 168.8,810.5 290,740.5" fill="#93c5fd" stroke="#1e3a8a" stroke-width="1.2"/>
+
+  <!-- Slanted top: BP(290,740.5) FP(168.8,810.5) FR(290,870) BR(411.2,800). Quad. -->
+  <polygon points="290,740.5 168.8,810.5 290,870 411.2,800" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.2"/>
+
+  <!-- Knob on top of high edge, iso projected: center (0, 20, 17+3.5) = (0, 20, 20.5) → (-20*3.5*0.866, 20*3.5*0.5 - 20.5*3.5) = (-60.6, 35-71.75) = (-60.6, -36.75) → (229.4, 763.25). Radius 7px (knob 4mm × 3.5 × 0.5 ellipse ratio) -->
+  <ellipse cx="229.4" cy="763.25" rx="20" ry="11" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+
+  <!-- High / low edge labels -->
+  <text x="290" y="730" text-anchor="middle" font-size="10" font-weight="700" fill="#dc2626">高边 (x=0)</text>
+  <text x="430" y="795" text-anchor="end" font-size="10" font-weight="700" fill="#0f172a">低边 (x=width)</text>
+
+  <!-- 1A' slope_length: arrow along bottom from BL to BR -->
+  <line x1="290" y1="800" x2="411.2" y2="800" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="350" y="794" text-anchor="middle" font-size="10" fill="#0f172a">40.0</text>
+  <line x1="380" y1="700" x2="350" y2="780" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="380" cy="690" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="380" y="695" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1A'</text>
+
+  <!-- 1B' slope_depth: along Y (back→front), project to bottom-back-left to bottom-front-left -->
+  <line x1="290" y1="800" x2="168.8" y2="870" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="220" y="845" text-anchor="middle" font-size="10" fill="#0f172a">40.0</text>
+  <line x1="80" y1="900" x2="180" y2="868" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="65" cy="900" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="65" y="905" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1B'</text>
+
+  <!-- 2' slope_height_high: from BL bottom to BP peak (high edge) -->
+  <line x1="290" y1="800" x2="290" y2="740.5" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="285" y="775" text-anchor="end" font-size="10" fill="#0f172a">17.0</text>
+  <line x1="200" y1="780" x2="270" y2="775" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="190" cy="780" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="190" y="785" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2'</text>
+
+  <!-- 3' stud_Ø: across the iso knob, shown in iso ellipse (rx direction) -->
+  <line x1="209" y1="763.25" x2="249" y2="763.25" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="200" y="755" text-anchor="end" font-size="10" fill="#0f172a">Ø16.0</text>
+  <line x1="100" y1="710" x2="200" y2="758" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="90" cy="700" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="90" y="705" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">3'</text>
+
+  <!-- 4' slope_height_total_high: from BL bottom to knob top (high edge) -->
+  <line x1="290" y1="800" x2="290" y2="752.25" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="305" y="780" font-size="10" fill="#0f172a">24.0</text>
+  <text x="305" y="792" font-size="9" fill="#475569">= 17+7</text>
+  <line x1="335" y1="775" x2="345" y2="775" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="360" cy="775" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="360" y="780" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">4'</text>
+
+  <text x="290" y="875" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">iso 上 1B' 沿 Y 方向, 1A' 沿 X 方向; ②'/④' 在高边</text>
+
+  <!-- ============== Subplot 4: slope vs brick 字段映射 ============== -->
+  <rect x="560" y="480" width="500" height="420" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="810" y="505" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">slope vs brick 字段映射</text>
+
+  <g font-size="11" fill="#0f172a">
+    <text x="600" y="540" font-weight="700">brick/plate/tile (5 字段)</text>
+    <text x="600" y="558" fill="#475569">───────────────────────</text>
+    <text x="600" y="578">1A  outer_pitch_mm</text>
+    <text x="600" y="594">1B  inner_pitch_mm</text>
+    <text x="600" y="610">2   brick_height_net_mm</text>
+    <text x="600" y="626">3   stud_diameter_mm</text>
+    <text x="600" y="642">4   brick_height_total_mm</text>
+
+    <text x="600" y="690" font-weight="700" fill="#dc2626">slope (5 字段, 不同名)</text>
+    <text x="600" y="708" fill="#475569">───────────────────────</text>
+    <text x="600" y="728" fill="#dc2626">1A' slope_length_mm</text>
+    <text x="600" y="744" fill="#dc2626">1B' slope_depth_mm</text>
+    <text x="600" y="760" fill="#dc2626">2'  slope_height_high_mm</text>
+    <text x="600" y="776" fill="#dc2626">3'  stud_diameter_mm (沿用)</text>
+    <text x="600" y="792" fill="#dc2626">4'  slope_height_total_high_mm</text>
+
+    <text x="600" y="820" font-weight="600">派生 (slope):</text>
+    <text x="600" y="838" fill="#475569">低边净高 = 0 (45° 楔形)</text>
+    <text x="600" y="854" fill="#475569">knob_h = ④' - ②' (跟 brick 一样)</text>
+    <text x="600" y="870" fill="#475569">unit = (1A' + brick) → 1A' 已经是 total length,</text>
+    <text x="600" y="886" fill="#475569">       unit = slope_length_mm / units_x</text>
+  </g>
+
+  <!-- ============== Legend ============== -->
+  <rect x="40" y="910" width="1020" height="100" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="60" y="932" font-size="12" font-weight="700" fill="#0f172a">报数格式 — 把 5 个 slope 字段发回来 (默认单位 mm):</text>
+
+  <g font-size="11" fill="#0f172a">
+    <circle cx="68" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="68" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">1A'</text>
+    <text x="92" y="955" font-weight="600">slope_length_mm</text>
+    <text x="92" y="970" fill="#475569">X 方向总长 (高边 → 低边, 40mm)</text>
+
+    <circle cx="288" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="288" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">1B'</text>
+    <text x="312" y="955" font-weight="600">slope_depth_mm</text>
+    <text x="312" y="970" fill="#475569">Y 方向总深度 (= units_y × unit)</text>
+
+    <circle cx="508" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="508" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">2'</text>
+    <text x="525" y="955" font-weight="600">slope_height_high_mm</text>
+    <text x="525" y="970" fill="#475569">高边净高 (底 → 高边顶, 17.0)</text>
+
+    <circle cx="738" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="738" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">3'</text>
+    <text x="757" y="955" font-weight="600">stud_diameter_mm</text>
+    <text x="757" y="970" fill="#475569">高边 stud 直径 (任选一个测外径)</text>
+
+    <circle cx="68" cy="998" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="68" y="1002" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">4'</text>
+    <text x="92" y="993" font-weight="600">slope_height_total_high_mm</text>
+    <text x="92" y="1006" fill="#475569">高边总高 (底 → 凸点顶, 24.0)</text>
+  </g>
+</svg>
