@@ -6,6 +6,7 @@ Schema follows `docs/design.md` §7 exactly:
 * ``jobs``:      uuid, capture_id (FK), kind, status, progress, stage, error, ts
 * ``assets``:    uuid, job_id (FK), kind, storage_key, size_bytes, meta (jsonb), ts
 """
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -42,10 +43,45 @@ class Capture(Base):
     # ``server_default`` (Postgres applies the default on insert when
     # the application does not specify a value).
     capture_mode: Mapped[str] = mapped_column(
-        String(32), nullable=False,
+        String(32),
+        nullable=False,
         default="phone_walkaround",
         server_default="phone_walkaround",
     )
+    # ---- Parametric-block (v0.3+, capture-procedure.md / ROADMAP.md §v0.3) ----
+    # These columns are populated ONLY for captures whose ``mode`` is
+    # ``"parametric_block"`` (i.e. no SfM/photo path — the user measured
+    # the part with a caliper and ``tools/measure_block.py`` derived the
+    # GLB from public spec instead). For photo captures they stay NULL.
+    # ``mode`` is NOT NULL with a server default of ``"photo"`` so the
+    # 0003 migration backfills all existing rows safely.
+    mode: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="photo",
+        server_default="photo",
+    )
+    #: Brick system: one of ``"duplo"``, ``"lego"``, ``"feile"``, ``"generic"``.
+    system: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Brick kind: one of ``"brick"``, ``"plate"``, ``"tile"``, ``"slope"``.
+    kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: Stud-grid dimensions in units (1 unit = 8mm LEGO / 20mm DUPLO / ...).
+    units_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    units_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: 5 raw caliper measurements in millimetres, captured verbatim from
+    #: the user. Keys: ``outer_pitch``, ``inner_pitch``, ``stud_diameter``,
+    #: ``brick_height_net``, ``brick_height_total``. Populated by
+    #: ``tools/measure_block.py`` from the form input.
+    raw_measurements_mm: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #: 4 spec values derived from the raw measurements (the canonical
+    #: ``BlockSpec`` fields: ``unit_mm``, ``plate_height_mm``,
+    #: ``stud_diameter_mm``, ``clearance_mm``). Populated by
+    #: ``tools/measure_block.py`` after the algebraic derivation step.
+    derived_spec_mm: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #: Cross-check warnings raised by ``tools/measure_block.py`` when the
+    #: 5 caliper numbers disagree beyond tolerance (e.g. unit_mm drift,
+    #: inconsistent inner/outer pitch). Empty list = clean.
+    cross_check_warnings: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = make_created_at()
     updated_at: Mapped[datetime] = make_updated_at()
 
@@ -75,9 +111,7 @@ class Job(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     celery_task_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = make_created_at()
     updated_at: Mapped[datetime] = make_updated_at()
 
