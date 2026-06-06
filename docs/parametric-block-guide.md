@@ -130,6 +130,19 @@
 **slope 用不同的 5 字段** — 因为楔形几何不像 brick 那样有均匀高度 + 完整 stud 阵列。
 完整 slope 卡尺点见 `docs/measure-block-slope.svg` (v0.4 新增, 顶视 + 前视 + 立体 3 子图)。
 
+> **v0.4 实现注**: 上表 slope 列里的 `slope_length_mm` / `slope_depth_mm` /
+> `slope_height_high_mm` / `slope_height_total_high_mm` 是 **v0.5+ 设计的字段名**,
+> 描绘"如果按 slope 真实几何来反算 unit / height / knob_h, 应该用哪 5 个卡尺位置"。
+> v0.4 当前实现下, App 端对 `kind=slope` 仍接收 **5 个 brick-shaped 字段**
+> (`outer_pitch_mm` / `inner_pitch_mm` / `stud_diameter_mm` / `brick_height_net_mm` /
+> `brick_height_total_mm`), 后端 `_derive_spec_from_raw` 走 brick 几何反算
+> `unit = (1A+1B)/2` / `height = ②` / `knob_h = ④-②`, BlockGenerator 再按 `kind=slope`
+> 走 45° 楔形几何生成, 但 `unit / height / knob_h` 这 3 个数**只来自 brick-shaped
+> 推导**, 没有走 "高边净高" 等 slope 专属字段。后果: 用户传 brick-shaped 数字 → 楔形
+> 几何的 unit / 高边 / 凸点高会跟用户手里的实物斜面对不上, **要拿"实物斜面的高边净高
+> 当 ② 填"才会准** (低边天然是 0, 不影响推导)。扩 `_derive_spec_from_raw` 走 slope
+> 专用字段在 v0.5+ 排期 (见 `ROADMAP.md §4.3`)。
+
 **round / technic 暂不支持** — `docs/design-phase2.md` 明确把这两类 out of scope
 ("`block_generator.py` 注释: round bricks / technic (cross-axle) 4 个 kind 已覆盖
 3-5 岁 90% 实际碰到的零件")。强行提交会在后端 `services/block_generator.py:200` 抛
@@ -299,9 +312,8 @@ data: {"error": "..."}
 A: 能。`photos` 字段 0-20 张任意数量, 0 张走纯 caliper 路径, 1+ 张走 "caliper + 校准" 路径。
 
 **Q: 1B 内径距量不出来 (空隙太窄) 怎么办?**
-A: 0.05mm 卡尺量程内 (~4mm) 应可量; 实在量不出, 把 1A 留空 + 2/3/4 都填, App 会把
-`inner_pitch_mm = outer_pitch_mm - 2 × stud_diameter` 反推回来 (前端 `crossCheckMeasurements`
-已包含此校验, 后端 `derive_spec_from_raw` 等价)。
+A: 0.05mm 卡尺量程内 (~4mm) 应可量; 实在量不出, 5 字段全部必填, 没有自动反推路径。
+换 0.01mm 精度的卡尺或塞尺。
 
 **Q: 提交后 GLB 跟实物对不上?**
 A: 按顺序排查 (跟 `docs/capture-procedure.md §4` 一致):
@@ -314,6 +326,14 @@ A: 按顺序排查 (跟 `docs/capture-procedure.md §4` 一致):
 A: 见 `docs/measure-block-slope.svg` — 5 字段名跟 brick 不同:
 `slope_length_mm` / `slope_depth_mm` / `stud_diameter_mm` / `slope_height_high_mm` /
 `slope_height_total_high_mm`。低边天然为 0, 不需测量。
+
+> **v0.4 实现注**: 上面的 `slope_*` 前缀名是 v0.5+ 的设计, 描述"如果按 slope 真实几何
+> 反算应该量哪 5 个位置"。v0.4 当前实现下, App 端对 `kind=slope` 仍接收 5 个
+> brick-shaped 字段 (`outer_pitch_mm` / `inner_pitch_mm` / `stud_diameter_mm` /
+> `brick_height_net_mm` / `brick_height_total_mm`); 用户**把"高边净高"当 `brick_height_net_mm`
+> 填, 把"高边总高"当 `brick_height_total_mm` 填**, 5 字段全部必填, 没有自动反推路径。
+> BlockGenerator 按 `kind=slope` 走 45° 楔形几何, 但 unit / 高边 / 凸点高 3 个数仍走
+> brick-shaped 推导。完整 v0.5+ 排期见 `ROADMAP.md §4.3`。
 
 **Q: round / technic 为什么不支持?**
 A: 4 个 kind (brick / plate / tile / slope) 已覆盖 3-5 岁 90% 实际碰到的零件; round 圆柱

@@ -45,6 +45,13 @@
 - **4'** `slope_height_total_high_mm` — 高边总高
 - **派生**: 低边净高 = 0 (45° 楔形), `knob_h = ④' - ②'`
 
+> **v0.4 实现注**: 上面 `slope_*` 前缀名是 v0.5+ 设计 (描述"按 slope 真实几何反算应该量哪 5 个位置")。
+> v0.4 当前实现下, `kind=slope` 走 brick-shaped 5 字段 (见 §1.1 上半 brick/plate/tile 列表),
+> `_derive_spec_from_raw` 走 `unit = (1A+1B)/2` / `height = ②` / `knob_h = ④-②`, 然后
+> BlockGenerator 按 `kind=slope` 走 45° 楔形几何生成。**用户应把"高边净高"当 `brick_height_net_mm`
+> 填, "高边总高"当 `brick_height_total_mm` 填** — 这 2 个数字会被解析成砖块的 height / total,
+> 推导出的高边就准。v0.5+ 才扩 `_derive_spec_from_raw` 走 slope 专用字段 (见 `ROADMAP.md §4.3`)。
+
 **推导**（`tools/measure_block.py` 自动算, 不用手算）:
 
 | BlockSpec 字段 | 公式 | 来源 |
