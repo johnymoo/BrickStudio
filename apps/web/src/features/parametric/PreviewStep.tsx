@@ -89,17 +89,19 @@ export function PreviewStep({
   const abortRef = useRef<AbortController | null>(null);
 
   // Initial seed from the POST response (so we don't need to wait for the
-  // SSE open event to show the first progress bar value).
+  // SSE open event to show the first progress bar value). The backend's
+  // POST 201 always returns ``status: "pending"``; the terminal state
+  // arrives via the SSE ``completed`` / ``failed`` event below.
   useEffect(() => {
     if (!block) return;
     setJobState({
       status: block.status,
       progress: block.status === "completed" ? 100 : 0,
       stage: block.status === "completed" ? "completed" : "parametric_generate",
-      error: block.error ?? null,
-      resultAssetId: block.result_asset_id ?? null,
+      error: null,
+      resultAssetId: null,
     });
-  }, [block?.block_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [block?.capture_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Subscribe to SSE updates once we have a job id.
   useEffect(() => {

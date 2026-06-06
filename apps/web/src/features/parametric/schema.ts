@@ -67,40 +67,45 @@ export const MAX_UNITS = 16;
 // -------- 5 raw measurements -------------------------------------------------
 /**
  * The 5 caliper measurements keyed by the exact names used in
- * `tools/measure_block.py` (so the JSON we POST matches what the backend
- * stores in `captures.raw_measurements_mm`).
+ * `tools/measure_block.py` AND in the backend's `ParametricBlockRequest`
+ * schema (`apps/api/src/api/v1/parametric_blocks.py:_RAW_KEYS`). The
+ * `_mm` suffix is the contract — the route layer rejects requests whose
+ * `raw_measurements_mm` JSON object is missing any of these 5 keys.
+ * The display labels keep the human-friendly short name so the user
+ * sees ``outer_pitch`` etc. in the UI; the JSON we POST carries the
+ * canonical ``outer_pitch_mm`` form.
  */
 export const MEASUREMENT_FIELDS = [
   {
-    key: "outer_pitch",
+    key: "outer_pitch_mm",
     code: "1A",
     label: "外径距 (outer_pitch)",
     hint: "砖块总长, 跨两端 stud 圆周最远点 (卡尺跨外)",
     unit: "mm",
   },
   {
-    key: "inner_pitch",
+    key: "inner_pitch_mm",
     code: "1B",
     label: "内径距 (inner_pitch)",
     hint: "两 stud 圆周之间空隙 (卡尺插入两 stud 之间)",
     unit: "mm",
   },
   {
-    key: "stud_diameter",
+    key: "stud_diameter_mm",
     code: "3",
     label: "凸点直径 (stud_diameter)",
     hint: "单个 stud 直径 (任选一个, 卡尺卡外径)",
     unit: "mm",
   },
   {
-    key: "brick_height_net",
+    key: "brick_height_net_mm",
     code: "2",
     label: "砖块净高 (brick_height_net)",
     hint: "底面 → 砖顶, 不含凸点",
     unit: "mm",
   },
   {
-    key: "brick_height_total",
+    key: "brick_height_total_mm",
     code: "4",
     label: "砖块总高 (brick_height_total)",
     hint: "底面 → 凸点顶, 含凸点",
@@ -122,18 +127,23 @@ export function isMeasurementsComplete(m: Measurements | null | undefined): m is
 /** Cross-check: `stud_diameter ≈ (outer_pitch - inner_pitch) / 2`. Tolerance
  *  0.5 mm. Returns null if all measurements look consistent, otherwise a
  *  short human-readable warning. We keep this lightweight — the canonical
- *  cross-check happens in `tools/measure_block.py` server-side. The
- *  check only needs the 3 "stud" measurements to be filled; the two
- *  height fields are independent so we don't gate on them. */
+ *  cross-check happens in `apps/api/src/api/v1/parametric_blocks.py`
+ *  server-side (and in `tools/measure_block.py`). The check only needs
+ *  the 3 "stud" measurements to be filled; the two height fields are
+ *  independent so we don't gate on them. */
 export function crossCheckMeasurements(m: Measurements): string | null {
-  const { outer_pitch, inner_pitch, stud_diameter } = m;
-  if (![outer_pitch, inner_pitch, stud_diameter].every((v) => Number.isFinite(v) && v > 0)) {
+  const { outer_pitch_mm, inner_pitch_mm, stud_diameter_mm } = m;
+  if (
+    ![outer_pitch_mm, inner_pitch_mm, stud_diameter_mm].every(
+      (v) => Number.isFinite(v) && v > 0,
+    )
+  ) {
     return null;
   }
-  const derived = (outer_pitch - inner_pitch) / 2;
-  const drift = Math.abs(derived - stud_diameter);
+  const derived = (outer_pitch_mm - inner_pitch_mm) / 2;
+  const drift = Math.abs(derived - stud_diameter_mm);
   if (drift > 0.5) {
-    return `凸点直径反算 ${derived.toFixed(2)} mm 与填写 ${stud_diameter.toFixed(2)} mm 差 ${drift.toFixed(2)} mm, 建议复核 1B 或 3`;
+    return `凸点直径反算 ${derived.toFixed(2)} mm 与填写 ${stud_diameter_mm.toFixed(2)} mm 差 ${drift.toFixed(2)} mm, 建议复核 1B 或 3`;
   }
   return null;
 }
@@ -166,11 +176,11 @@ export const DEFAULT_FORM_STATE: Omit<ParametricFormState, "partId"> = {
   unitsX: 2,
   unitsY: 2,
   measurements: {
-    outer_pitch: NaN,
-    inner_pitch: NaN,
-    stud_diameter: NaN,
-    brick_height_net: NaN,
-    brick_height_total: NaN,
+    outer_pitch_mm: NaN,
+    inner_pitch_mm: NaN,
+    stud_diameter_mm: NaN,
+    brick_height_net_mm: NaN,
+    brick_height_total_mm: NaN,
   },
   jobId: null,
   captureId: null,

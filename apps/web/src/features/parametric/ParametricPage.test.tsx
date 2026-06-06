@@ -66,29 +66,25 @@ describe("ParametricPage", () => {
 
   it("advances through the 4 steps and submits the 5 caliper numbers", async () => {
     createParametricBlockMock.mockResolvedValue({
-      block_id: "block-1",
       capture_id: "cap-1",
       job_id: "job-1",
       part_id: "p-1",
       status: "completed",
+      mode: "parametric_block",
       system: "duplo",
       kind: "brick",
       units_x: 2,
       units_y: 2,
       raw_measurements_mm: {
-        outer_pitch: 35.95,
-        inner_pitch: 4.05,
-        stud_diameter: 16.1,
-        brick_height_net: 17.05,
-        brick_height_total: 24.1,
+        outer_pitch_mm: 35.95,
+        inner_pitch_mm: 4.05,
+        stud_diameter_mm: 16.1,
+        brick_height_net_mm: 17.05,
+        brick_height_total_mm: 24.1,
       },
       derived_spec_mm: { unit_mm: 20, height_mm: 17, knob_diameter_mm: 16, knob_height_mm: 7.05 },
       cross_check_warnings: [],
-      result_asset_id: "asset-1",
-      pipeline_used: "parametric_block",
-      error: null,
       created_at: "2026-06-06T10:00:00Z",
-      updated_at: "2026-06-06T10:00:00Z",
     });
 
     renderPage();
@@ -131,12 +127,14 @@ describe("ParametricPage", () => {
     const next3 = screen.getByTestId("step3-next");
     expect(next3).toBeDisabled();
 
-    const measurements: Record<string, number> = {
-      outer_pitch: 16.0,
-      inner_pitch: 7.2,
-      stud_diameter: 4.4,
-      brick_height_net: 9.5,
-      brick_height_total: 11.2,
+    // The 5 keys MUST use the `_mm` suffix to match the backend contract
+    // (apps/api/src/api/v1/parametric_blocks.py:_RAW_KEYS).
+    const measurements = {
+      outer_pitch_mm: 16.0,
+      inner_pitch_mm: 7.2,
+      stud_diameter_mm: 4.4,
+      brick_height_net_mm: 9.5,
+      brick_height_total_mm: 11.2,
     };
     for (const [k, v] of Object.entries(measurements)) {
       const input = screen.getByTestId(`measurement-input-${k}`) as HTMLInputElement;
@@ -157,16 +155,18 @@ describe("ParametricPage", () => {
     await waitFor(() => expect(screen.getByTestId("step-preview")).toBeInTheDocument());
     await waitFor(() => expect(createParametricBlockMock).toHaveBeenCalledTimes(1));
 
-    // The mock returned status=completed → Viewer mounts.
-    await waitFor(() => expect(screen.getByTestId("glb-viewer-wrap")).toBeInTheDocument());
-
-    // Verify the API was called with the right shape.
+    // Verify the API was called with the right shape. We check the
+    // raw_measurements_mm keys explicitly — the contract is that every
+    // key carries the `_mm` suffix the backend enforces.
     const arg = createParametricBlockMock.mock.calls[0]![0];
     expect(arg.system).toBe("lego");
     expect(arg.kind).toBe("tile");
     expect(arg.units_x).toBe(3);
     expect(arg.units_y).toBe(2);
     expect(arg.raw_measurements_mm).toEqual(measurements);
+    expect(Object.keys(arg.raw_measurements_mm).sort()).toEqual(
+      ["brick_height_net_mm", "brick_height_total_mm", "inner_pitch_mm", "outer_pitch_mm", "stud_diameter_mm"].sort(),
+    );
     expect(arg.photos).toBeUndefined(); // no photos in this test
   });
 
@@ -202,9 +202,10 @@ describe("ParametricPage", () => {
     await waitFor(() => expect(screen.getByTestId("step-measurements")).toBeInTheDocument());
 
     // outer=20, inner=4 → expected stud = 8, we type 16 → 8mm off → warning.
-    const outer = screen.getByTestId("measurement-input-outer_pitch") as HTMLInputElement;
-    const inner = screen.getByTestId("measurement-input-inner_pitch") as HTMLInputElement;
-    const stud = screen.getByTestId("measurement-input-stud_diameter") as HTMLInputElement;
+    // The wizard's input testids carry the _mm suffix (matches schema keys).
+    const outer = screen.getByTestId("measurement-input-outer_pitch_mm") as HTMLInputElement;
+    const inner = screen.getByTestId("measurement-input-inner_pitch_mm") as HTMLInputElement;
+    const stud = screen.getByTestId("measurement-input-stud_diameter_mm") as HTMLInputElement;
     await act(async () => {
       fireEvent.change(outer, { target: { value: "20" } });
       fireEvent.change(inner, { target: { value: "4" } });
@@ -225,11 +226,11 @@ describe("ParametricPage", () => {
     });
     await waitFor(() => expect(screen.getByTestId("step-measurements")).toBeInTheDocument());
     for (const [k, v] of Object.entries({
-      outer_pitch: 20,
-      inner_pitch: 4,
-      stud_diameter: 8,
-      brick_height_net: 9.6,
-      brick_height_total: 11.3,
+      outer_pitch_mm: 20,
+      inner_pitch_mm: 4,
+      stud_diameter_mm: 8,
+      brick_height_net_mm: 9.6,
+      brick_height_total_mm: 11.3,
     })) {
       await act(async () => {
         fireEvent.change(screen.getByTestId(`measurement-input-${k}`), { target: { value: String(v) } });

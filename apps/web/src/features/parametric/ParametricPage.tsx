@@ -12,7 +12,7 @@
  * throwaway flow; if the user navigates away we re-create from scratch.
  *
  * Submit is a single call to `createParametricBlock`. On success the
- * resulting `block_id` + `job_id` thread into `PreviewStep` which owns
+ * resulting `capture_id` + `job_id` thread into `PreviewStep` which owns
  * the SSE subscription.
  */
 import { useCallback, useState } from "react";
@@ -90,7 +90,6 @@ export function ParametricPage() {
         units_y: form.unitsY,
         raw_measurements_mm: form.measurements,
         photos: form.photos.length > 0 ? form.photos : undefined,
-        capture_mode: "parametric_block",
       });
       setBlock(res);
       setForm((f) => ({ ...f, jobId: res.job_id, captureId: res.capture_id }));

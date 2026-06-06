@@ -28,7 +28,6 @@ import { execSync } from "node:child_process";
 
 const FIXTURE_PART_ID = "e2e-parametric-001";
 const FAKE_JOB_ID = "job-param-e2e-001";
-const FAKE_BLOCK_ID = "block-param-e2e-001";
 const FAKE_CAPTURE_ID = "capture-param-e2e-001";
 const FAKE_ASSET_ID = "asset-param-e2e-001";
 const SCREENSHOTS_DIR = path.join(__dirname, "screenshots");
@@ -49,29 +48,25 @@ async function mockParametricApi(page: Page) {
         status: 201,
         contentType: "application/json",
         body: JSON.stringify({
-          block_id: FAKE_BLOCK_ID,
           capture_id: FAKE_CAPTURE_ID,
           job_id: FAKE_JOB_ID,
           part_id: FIXTURE_PART_ID,
           status: "running",
+          mode: "parametric_block",
           system: "duplo",
           kind: "brick",
           units_x: 2,
           units_y: 2,
           raw_measurements_mm: {
-            outer_pitch: 36,
-            inner_pitch: 4,
-            stud_diameter: 16,
-            brick_height_net: 17,
-            brick_height_total: 24,
+            outer_pitch_mm: 36,
+            inner_pitch_mm: 4,
+            stud_diameter_mm: 16,
+            brick_height_net_mm: 17,
+            brick_height_total_mm: 24,
           },
           derived_spec_mm: { unit_mm: 20, height_mm: 17, knob_diameter_mm: 16, knob_height_mm: 7 },
           cross_check_warnings: [],
-          result_asset_id: null,
-          pipeline_used: "parametric_block",
-          error: null,
           created_at: "2026-06-06T10:00:00.000Z",
-          updated_at: "2026-06-06T10:00:00.000Z",
         }),
       });
       return;
@@ -82,7 +77,6 @@ async function mockParametricApi(page: Page) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          block_id: FAKE_BLOCK_ID,
           capture_id: FAKE_CAPTURE_ID,
           job_id: FAKE_JOB_ID,
           part_id: FIXTURE_PART_ID,
@@ -92,17 +86,13 @@ async function mockParametricApi(page: Page) {
           units_x: 2,
           units_y: 2,
           raw_measurements_mm: {
-            outer_pitch: 36,
-            inner_pitch: 4,
-            stud_diameter: 16,
-            brick_height_net: 17,
-            brick_height_total: 24,
+            outer_pitch_mm: 36,
+            inner_pitch_mm: 4,
+            stud_diameter_mm: 16,
+            brick_height_net_mm: 17,
+            brick_height_total_mm: 24,
           },
-          result_asset_id: FAKE_ASSET_ID,
-          pipeline_used: "parametric_block",
-          error: null,
           created_at: "2026-06-06T10:00:00.000Z",
-          updated_at: "2026-06-06T10:00:00.000Z",
         }),
       });
       return;
@@ -266,12 +256,16 @@ test.describe("parametric wizard", () => {
     await expect(next3).toBeDisabled();
     // embed-like diagram rendered
     await expect(page.getByTestId("measurement-diagram")).toBeVisible();
+    // The wizard's input testids carry the `_mm` suffix (the keys are the
+    // same names we POST in raw_measurements_mm, and the backend
+    // ``_RAW_KEYS`` in parametric_blocks.py rejects any payload missing
+    // them — see apps/api/src/api/v1/parametric_blocks.py:107-113).
     const measurements: Record<string, number> = {
-      outer_pitch: 16.0,
-      inner_pitch: 7.2,
-      stud_diameter: 4.4,
-      brick_height_net: 9.5,
-      brick_height_total: 11.2,
+      outer_pitch_mm: 16.0,
+      inner_pitch_mm: 7.2,
+      stud_diameter_mm: 4.4,
+      brick_height_net_mm: 9.5,
+      brick_height_total_mm: 11.2,
     };
     for (const [k, v] of Object.entries(measurements)) {
       await page.getByTestId(`measurement-input-${k}`).fill(String(v));
@@ -319,11 +313,11 @@ test.describe("parametric wizard", () => {
     await page.getByTestId("step2-next").click();
     await expect(page.getByTestId("step-measurements")).toBeVisible();
     for (const [k, v] of Object.entries({
-      outer_pitch: 20,
-      inner_pitch: 4,
-      stud_diameter: 8,
-      brick_height_net: 9.6,
-      brick_height_total: 11.3,
+      outer_pitch_mm: 20,
+      inner_pitch_mm: 4,
+      stud_diameter_mm: 8,
+      brick_height_net_mm: 9.6,
+      brick_height_total_mm: 11.3,
     })) {
       await page.getByTestId(`measurement-input-${k}`).fill(String(v));
     }
@@ -343,12 +337,13 @@ test.describe("parametric wizard", () => {
     await expect(page.getByTestId("step-measurements")).toBeVisible();
 
     // 1A=20, 1B=4 → expected stud=8, we type 16 → 8 mm drift → warning.
-    await page.getByTestId("measurement-input-outer_pitch").fill("20");
-    await page.getByTestId("measurement-input-inner_pitch").fill("4");
-    await page.getByTestId("measurement-input-stud_diameter").fill("16");
+    // Input testids follow the schema key (with the `_mm` suffix).
+    await page.getByTestId("measurement-input-outer_pitch_mm").fill("20");
+    await page.getByTestId("measurement-input-inner_pitch_mm").fill("4");
+    await page.getByTestId("measurement-input-stud_diameter_mm").fill("16");
     await expect(page.getByTestId("cross-check-warning")).toBeVisible();
     // Fix the stud number, warning disappears.
-    await page.getByTestId("measurement-input-stud_diameter").fill("8");
+    await page.getByTestId("measurement-input-stud_diameter_mm").fill("8");
     await expect(page.getByTestId("cross-check-warning")).toHaveCount(0);
   });
 });
