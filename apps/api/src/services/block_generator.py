@@ -36,6 +36,9 @@ LEGO / DUPLO public dimensions (LEGO.com product specs, ±0.1mm tolerance):
 
 * LEGO  :  1 unit = 8.0 × 8.0 × 9.6 mm,  knob Ø 4.8 × 1.7 mm,  tube Ø 6.2 × 8.4 mm
 * DUPLO :  1 unit = 20.0 × 20.0 × 17.0 mm, knob Ø 16.0 × 7.0 mm, tube Ø 12.0 × 14.0 mm
+* FEILE :  1 unit = 16.0 × 16.0 × 19.2 mm, knob Ø 9.4 × 5.4 mm, tube Ø 11.2 × 15.5 mm
+          (国产费乐大颗粒, LEGO-compatible 16mm 节距; baseline from
+          first user 2x2 measurement 2026-06-06, ±0.2mm)
 """
 from __future__ import annotations
 
@@ -66,6 +69,22 @@ DUPLO_BRICK_HEIGHT_MM: float = 17.0
 DUPLO_PLATE_HEIGHT_MM: float = 6.0  # ≈ brick / 3
 DUPLO_SLOPE_DROP_MM: float = 17.0
 
+# 费乐 (国产大颗粒, LEGO-compatible 16mm 节距). Baseline from user's
+# first 2x2 brick measurement 2026-06-06 — see
+# tests/e2e/fixtures/real-bricks/user-measured-brick-001.json. tube
+# dimensions are estimated (knob_d × 1.2 for diameter, ~ brick_h - ε for
+# depth) since 费乐 公开 specs don't publish tube sizes; override via
+# BlockSpec(tube_diameter_mm=..., tube_height_mm=...) if you measure
+# the real part.
+FEILE_UNIT_MM: float = 16.0
+FEILE_KNOB_DIAMETER_MM: float = 9.4
+FEILE_KNOB_HEIGHT_MM: float = 5.4
+FEILE_TUBE_DIAMETER_MM: float = 11.2
+FEILE_TUBE_HEIGHT_MM: float = 15.5
+FEILE_BRICK_HEIGHT_MM: float = 19.2
+FEILE_PLATE_HEIGHT_MM: float = 6.4  # ≈ brick / 3
+FEILE_SLOPE_DROP_MM: float = 19.2  # slope drops full brick height
+
 
 # Per-kind height lookup. ``slope`` shares brick height because the
 # wedge is full-height at one edge and zero at the other; ``tile`` shares
@@ -82,6 +101,12 @@ _KIND_HEIGHT = {
         "plate": LEGO_PLATE_HEIGHT_MM,
         "tile": LEGO_PLATE_HEIGHT_MM,
         "slope": LEGO_BRICK_HEIGHT_MM,
+    },
+    "feile": {
+        "brick": FEILE_BRICK_HEIGHT_MM,
+        "plate": FEILE_PLATE_HEIGHT_MM,
+        "tile": FEILE_PLATE_HEIGHT_MM,
+        "slope": FEILE_BRICK_HEIGHT_MM,
     },
 }
 
@@ -147,6 +172,15 @@ class BlockSpec:
                 "knob_h": LEGO_KNOB_HEIGHT_MM,
                 "tube_d": LEGO_TUBE_DIAMETER_MM,
                 "tube_h": LEGO_TUBE_HEIGHT_MM,
+            }
+        elif self.system == "feile":
+            base = {
+                "unit": FEILE_UNIT_MM,
+                "height": _KIND_HEIGHT["feile"][self.kind],
+                "knob_d": FEILE_KNOB_DIAMETER_MM,
+                "knob_h": FEILE_KNOB_HEIGHT_MM,
+                "tube_d": FEILE_TUBE_DIAMETER_MM,
+                "tube_h": FEILE_TUBE_HEIGHT_MM,
             }
         elif self.system == "generic":
             unit = self.unit_mm or 10.0
@@ -402,6 +436,14 @@ __all__ = [
     "LEGO_TUBE_DIAMETER_MM",
     "LEGO_TUBE_HEIGHT_MM",
     "LEGO_UNIT_MM",
+    "FEILE_BRICK_HEIGHT_MM",
+    "FEILE_KNOB_DIAMETER_MM",
+    "FEILE_KNOB_HEIGHT_MM",
+    "FEILE_PLATE_HEIGHT_MM",
+    "FEILE_SLOPE_DROP_MM",
+    "FEILE_TUBE_DIAMETER_MM",
+    "FEILE_TUBE_HEIGHT_MM",
+    "FEILE_UNIT_MM",
     "export_glb",
     "generate",
 ]

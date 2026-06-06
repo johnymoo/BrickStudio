@@ -20,6 +20,47 @@
 - spec 跟 spec 不齐: 用手里的实物改 `BlockSpec` 的 override (`unit_mm=...`), 不改 `LEGO_UNIT_MM` 这些公开常量。
 - 并排渲染输出到 `docs/validation/{part_id}-side-by-side.png`, 跟 GLB 一起 commit, **当 spec 验证的可视化证据**。
 
+## 1.1 测量示意 (4 个核心尺寸)
+
+量之前先看这张图, 5 个编号对应 5 个**卡尺可直接卡**的原始测量（不是 4 个 spec 中心距——中心距量不准, 改成外径+内径反算）:
+
+![测量示意](./measure-block-annotated.svg)
+
+- **1A** `outer_pitch_mm` — 砖块总长 (跨两端 stud 圆周, 大尺寸好量)
+- **1B** `inner_pitch_mm` — 两 stud 圆周之间空隙 (4mm 量程内, 0.05 卡尺可量)
+- **②** `brick_height_net_mm` — 砖块净高 (底面 → 砖顶, 不含凸点)
+- **③** `stud_diameter_mm` — 单个 stud 直径 (任选一个测外径)
+- **④** `brick_height_total_mm` — 砖块总高 (底面 → 凸点顶, 含凸点)
+
+**推导**（`tools/measure_block.py` 自动算, 不用手算）:
+
+| BlockSpec 字段 | 公式 | 来源 |
+|---|---|---|
+| `unit_mm` | `(1A + 1B) / 2` | stud_Ø 误差互消 |
+| `knob_diameter_mm` | `③` | 直接用 |
+| `height_mm` | `②` | 直接用 |
+| `knob_height_mm` | `④ - ②` | 总高 - 净高 |
+
+**冗余校验**: `stud_diameter_mm` 跟 `(1A - 1B) / 2` 应一致, 差 > 0.5mm 自动报警 (说明 1B 量错了)。
+
+量完把 5 个数字发回来, 格式任选 (默认单位 mm):
+
+```
+1A=36.05
+1B=3.95
+2=17.02
+3=16.10
+4=24.05
+```
+
+或一句话:
+
+```
+1A=36.05, 1B=3.95, 2=17.02, 3=16.10, 4=24.05
+```
+
+拿到数字我跑 `tools/measure_block.py` 出 GLB + spec.json + 3-view preview, 如果校验通过会显示 "derived unit_mm = 20.000", 不通过会出 ⚠。
+
 ## 2. 采集设备建议
 
 | 设备 | 用途 | 替代方案 |
