@@ -56,3 +56,30 @@ def test_load_depth16_png_rejects_rgb() -> None:
     rgb.save(buf, format="PNG")
     with pytest.raises(ValueError, match="single-channel"):
         load_depth16_png(buf.getvalue())
+
+
+def test_metric_pitch_constant_depth() -> None:
+    """A 2x2 grid 80px apart at Z=250mm with fx=1250 → pitch = 16mm.
+
+    pitch_mm = px_pitch * Z / fx = 80 * 250 / 1250 = 16.0 (FEILE).
+    Depth is half-resolution to exercise the RGB→depth scaling path.
+    """
+    from services.brick_recognizer import metric_pitch
+
+    centers = np.array(
+        [[280.0, 200.0], [360.0, 200.0], [280.0, 280.0], [360.0, 280.0]],
+        dtype=np.float64,
+    )  # 80px pitch in both axes
+    intrinsics = {"fx": 1250.0, "fy": 1250.0, "cx": 320.0, "cy": 240.0, "width": 640, "height": 480}
+    depth = np.full((240, 320), 250, dtype=np.uint16)  # half-res, constant 250mm
+    pitch = metric_pitch(centers, depth, intrinsics)
+    assert pitch is not None
+    assert abs(pitch - 16.0) < 0.2, pitch
+
+
+def test_metric_pitch_too_few_points() -> None:
+    from services.brick_recognizer import metric_pitch
+
+    intrinsics = {"fx": 1250.0, "fy": 1250.0, "cx": 320.0, "cy": 240.0, "width": 640, "height": 480}
+    depth = np.full((10, 10), 250, dtype=np.uint16)
+    assert metric_pitch(np.array([[1.0, 1.0]]), depth, intrinsics) is None

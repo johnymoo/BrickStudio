@@ -88,6 +88,62 @@ def load_depth16_png(data: bytes) -> np.ndarray:
     return arr.astype(np.uint16)
 
 
+def _median_nn_distance(points: np.ndarray) -> float | None:
+    """Median nearest-neighbour distance among rows of ``points``.
+
+    Returns ``None`` for fewer than 2 points.
+    """
+    pts = np.asarray(points, dtype=np.float64)
+    if pts.shape[0] < 2:
+        return None
+    tree = cKDTree(pts)
+    # k=2: the first neighbour is the point itself (distance 0).
+    dists, _ = tree.query(pts, k=2)
+    return float(np.median(dists[:, 1]))
+
+
+def metric_pitch(
+    centers_px: np.ndarray,
+    depth_mm: np.ndarray,
+    intrinsics: dict[str, Any],
+) -> float | None:
+    """Metric stud pitch (mm) = median NN distance of un-projected studs.
+
+    ``centers_px`` are (x, y) stud centres in the RGB image. Each is
+    scaled to the (lower-resolution) depth image, sampled for Z (mm),
+    and un-projected with the RGB intrinsics:
+    ``X = (u-cx)/fx * Z``, ``Y = (v-cy)/fy * Z``. Returns ``None`` when
+    fewer than two studs have valid (> 0) depth.
+    """
+    centers = np.asarray(centers_px, dtype=np.float64)
+    if centers.shape[0] < 2:
+        return None
+    fx = float(intrinsics["fx"])
+    fy = float(intrinsics["fy"])
+    cx = float(intrinsics["cx"])
+    cy = float(intrinsics["cy"])
+    iw = float(intrinsics["width"])
+    ih = float(intrinsics["height"])
+    dh, dw = depth_mm.shape
+    sx = dw / iw
+    sy = dh / ih
+    pts3d: list[list[float]] = []
+    for u, v in centers:
+        du = int(round(u * sx))
+        dv = int(round(v * sy))
+        du = min(max(du, 0), dw - 1)
+        dv = min(max(dv, 0), dh - 1)
+        z = float(depth_mm[dv, du])
+        if z <= 0:
+            continue
+        x = (u - cx) / fx * z
+        y = (v - cy) / fy * z
+        pts3d.append([x, y, z])
+    if len(pts3d) < 2:
+        return None
+    return _median_nn_distance(np.array(pts3d, dtype=np.float64))
+
+
 __all__ = [
     "DEFAULT_MIN_CONFIDENCE",
     "DEFAULT_PITCH_TOLERANCE_MM",
@@ -95,4 +151,5 @@ __all__ = [
     "classify_system",
     "encode_depth16_png",
     "load_depth16_png",
+    "metric_pitch",
 ]
