@@ -5,7 +5,7 @@
 ## 当前阶段
 
 **阶段二 (v0.2)**: 用户能自己用起来
-- 拍照 N 张 (4-20) 智能引导 + 删/重拍 + 实时清晰度提示
+- 拍照 <PRIVATE_PERSON> 智能引导 + 删/重拍 + 实时清晰度提示
 - 后端真 3D 重建 (COLMAP 真 SfM, ≥8 张照片; Open3D fallback, 4-7 张)
 - 5 阶段进度可视化 (下载 / 稀疏重建 / 稠密重建 / 网格 / 完成)
 - 端到端 Playwright (8 张真实照片 fixture)
@@ -257,6 +257,10 @@ bash scripts/down-local.sh
 - [docs/design-phase2.md](docs/design-phase2.md) - 阶段二契约 (拍照 UX + 真 3D 重建)
 - [docs/api-contract.md](docs/api-contract.md) - API 详细契约
 - [docs/data-model.md](docs/data-model.md) - 数据模型
+- [docs/ar-capture-recognition-design.md](docs/ar-capture-recognition-design.md) - AR 采集识别设计规格 (v0.5)
+- [docs/ar-capture-recognition-plan.md](docs/ar-capture-recognition-plan.md) - AR 采集识别实现计划 (v0.5)
+- [docs/ROADMAP.md](docs/ROADMAP.md) - 版本路线图 (v0.1 → v0.5)
+- [docs/v0.5-plan.md](docs/v0.5-plan.md) - v0.5 开发计划
 
 ### 6. 开发
 
