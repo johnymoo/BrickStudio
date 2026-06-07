@@ -1,9 +1,9 @@
 # Design Spec: AR 采集识别 + 参数化建模（采集建模 · 识别/建模后端）
 
-- **Date:** 2026-06-07
+- **Date:** <PRIVATE_DATE>
 - **Repo:** `BrickStudio`（识别/建模后端 · Python·FastAPI·Celery）
 - **配对规格:** `ARCore-prototype/docs/superpowers/specs/2026-06-07-arcore-capture-client-design.md`（采集端）
-- **Status:** 已批准设计，待实现计划
+- **Status:** ✅ 已实现 (v0.5, commit `d6e4f37` → `HEAD`)
 
 ## 0. 背景与定位
 
