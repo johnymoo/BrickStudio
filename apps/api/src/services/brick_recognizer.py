@@ -65,9 +65,34 @@ def classify_system(
     return best_system, confidence
 
 
+def encode_depth16_png(arr_mm: np.ndarray) -> bytes:
+    """Encode a uint16 millimetre depth array as a lossless 16-bit PNG.
+
+    Used by tests / fixtures (the production depth bytes come from the
+    Android client). Mirrors :func:`load_depth16_png`.
+    """
+    img = Image.fromarray(np.ascontiguousarray(arr_mm.astype(np.uint16)))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def load_depth16_png(data: bytes) -> np.ndarray:
+    """Decode a 16-bit single-channel PNG into a uint16 (H, W) mm array."""
+    img = Image.open(io.BytesIO(data))
+    arr = np.asarray(img)
+    if arr.ndim != 2:
+        raise ValueError(
+            f"depth PNG must be single-channel (H, W); got shape {arr.shape}"
+        )
+    return arr.astype(np.uint16)
+
+
 __all__ = [
     "DEFAULT_MIN_CONFIDENCE",
     "DEFAULT_PITCH_TOLERANCE_MM",
     "SYSTEM_UNIT_MM",
     "classify_system",
+    "encode_depth16_png",
+    "load_depth16_png",
 ]
