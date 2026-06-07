@@ -19,8 +19,8 @@ function mockAssetEndpoint(url: string) {
         JSON.stringify({
           asset_id: "asset-1",
           kind: "mesh_gltf",
-          url: "https://minio.local/test.glb",
-          expires_at: "2026-06-05T10:00:00Z",
+          url: "<PRIVATE_URL>",
+          expires_at: "<PRIVATE_DATE>",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
@@ -60,7 +60,7 @@ describe("Viewer", () => {
     render(<Viewer assetId="asset-1" />);
     expect(screen.getByTestId("viewer-reset")).toBeInTheDocument();
     expect(screen.getByTestId("viewer-mode")).toBeInTheDocument();
-    expect(screen.getByTestId("bg-#0f172a")).toBeInTheDocument();
+    expect(screen.getByTestId("bg-var(--camera-bg)")).toBeInTheDocument();
     expect(screen.getByTestId("bg-#ffffff")).toBeInTheDocument();
   });
 
