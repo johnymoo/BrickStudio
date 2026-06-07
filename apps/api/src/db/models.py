@@ -82,6 +82,15 @@ class Capture(Base):
     #: 5 caliper numbers disagree beyond tolerance (e.g. unit_mm drift,
     #: inconsistent inner/outer pitch). Empty list = clean.
     cross_check_warnings: Mapped[list[Any] | None] = mapped_column(JSONB, nullable=True)
+    #: AR capture (v0.5, ar_recognized mode): the raw ``ar_metadata``
+    #: JSON the phone uploaded (camera intrinsics, depth dims, pose,
+    #: distance, coarse hints). Stored verbatim for audit / re-run.
+    ar_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    #: AR recognition output: ``units_x`` / ``units_y`` / ``pitch_mm`` /
+    #: ``system`` / ``confidence`` / ``warnings`` / ``ok`` / ``reason``.
+    #: Populated by ``services.brick_recognizer.recognize_brick`` in the
+    #: route layer. NULL for non-AR captures.
+    recognition_result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = make_created_at()
     updated_at: Mapped[datetime] = make_updated_at()
 
