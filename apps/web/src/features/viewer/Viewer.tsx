@@ -11,9 +11,20 @@ type ViewerProps = {
   assetId: string;
   className?: string;
   style?: CSSProperties;
-  /** Optional initial background override. Defaults to dark slate. */
+  /** Optional initial background override. Defaults to the theme camera bg. */
   background?: string;
 };
+
+/** Resolve a CSS `var(--name)` reference to its computed color, or pass through. */
+function resolveCssColor(value: string): string {
+  const match = value.match(/^var\((--[a-z0-9-]+)\)$/i);
+  const varName = match?.[1];
+  if (!varName) return value;
+  if (typeof window === "undefined") return value;
+  const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName);
+  const trimmed = (resolved ?? "").trim();
+  return trimmed || value;
+}
 
 type DisplayMode = "material" | "wireframe";
 
@@ -25,11 +36,14 @@ type DisplayMode = "material" | "wireframe";
  * - Exposes reset / background / wireframe controls
  * - Shows a spinner during load and an error banner on failure
  */
-export function Viewer({ assetId, className, style, background = "#0f172a" }: ViewerProps) {
+export function Viewer({ assetId, className, style, background = "var(--camera-bg)" }: ViewerProps) {
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>("material");
   const [bg, setBg] = useState<string>(background);
+  // Three.js Color doesn't understand CSS var() — resolve to a real color and
+  // re-resolve when the theme (light/dark class on <html>) changes.
+  const [resolvedBg, setResolvedBg] = useState<string>(() => resolveCssColor(background));
   const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
@@ -50,6 +64,23 @@ export function Viewer({ assetId, className, style, background = "#0f172a" }: Vi
     };
   }, [assetId]);
 
+  useEffect(() => {
+    if (!bg.startsWith("var(")) {
+      setResolvedBg(bg);
+      return;
+    }
+    setResolvedBg(resolveCssColor(bg));
+    if (typeof window === "undefined") return;
+    const observer = new MutationObserver(() => {
+      setResolvedBg(resolveCssColor(bg));
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, [bg]);
+
   return (
     <div className={clsx("relative h-full w-full", className)} style={style} data-testid="viewer">
       {error ? (
@@ -62,7 +93,7 @@ export function Viewer({ assetId, className, style, background = "#0f172a" }: Vi
           gl={{ antialias: true, alpha: true }}
           data-testid="viewer-canvas"
         >
-          <color attach="background" args={[bg]} />
+          <color attach="background" args={[resolvedBg]} />
           <ambientLight intensity={0.5} />
           <directionalLight position={[5, 10, 5]} intensity={1.1} castShadow={false} />
           <Suspense fallback={<Html center><Spinner /></Html>}>
@@ -175,7 +206,7 @@ function Controls({
   onReset: () => void;
 }) {
   return (
-    <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-md bg-slate-900/70 p-1 backdrop-blur">
+    <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-md bg-card/70 p-1 backdrop-blur">
       <button
         type="button"
         onClick={onReset}
@@ -195,8 +226,8 @@ function Controls({
         {displayMode === "material" ? "线框" : "材质"}
       </button>
       <div className="flex items-center gap-1 px-1">
-        <span className="text-[10px] text-slate-400">底色</span>
-        {(["#0f172a", "#ffffff", "#1e293b", "#000000"] as const).map((c) => (
+        <span className="text-[10px] text-txt-secondary">底色</span>
+        {(["var(--camera-bg)", "#ffffff", "#1e293b", "#000000"] as const).map((c) => (
           <button
             key={c}
             type="button"
@@ -205,9 +236,9 @@ function Controls({
             data-testid={`bg-${c}`}
             className={clsx(
               "h-3 w-3 rounded-full border",
-              bg === c ? "border-primary-500" : "border-slate-500",
+              bg === c ? "border-accent" : "border-border",
             )}
-            style={{ background: c }}
+            style={{ background: c.startsWith("var(") ? resolveCssColor(c) : c }}
           />
         ))}
       </div>
@@ -219,10 +250,10 @@ function Spinner() {
   return (
     <div
       role="status"
-      className="flex items-center gap-2 text-xs text-slate-300"
+      className="flex items-center gap-2 text-xs text-txt-secondary"
       data-testid="viewer-spinner"
     >
-      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
+      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-t-transparent" />
       <span>加载模型…</span>
     </div>
   );
@@ -231,12 +262,12 @@ function Spinner() {
 function ErrorBanner({ message }: { message: string }) {
   return (
     <div
-      className="grid h-full w-full place-items-center bg-rose-500/10 p-4 text-center text-sm text-rose-300"
+      className="grid h-full w-full place-items-center bg-err-bg p-4 text-center text-sm text-err"
       data-testid="viewer-error"
     >
       <div>
         <p className="font-medium">模型加载失败</p>
-        <p className="mt-1 text-xs text-rose-400">{message}</p>
+        <p className="mt-1 text-xs text-err">{message}</p>
       </div>
     </div>
   );
