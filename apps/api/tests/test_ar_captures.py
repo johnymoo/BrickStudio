@@ -1,10 +1,17 @@
 """Endpoint tests for POST /api/v1/ar-captures."""
 from __future__ import annotations
 
+import asyncio
 import json
 import struct
+import tempfile
+import uuid
 import zlib
 from collections.abc import AsyncIterator
+from pathlib import Path
+
+import pytest
+import trimesh
 
 from fixtures.synth_studs import make_ar_bundle
 
@@ -90,3 +97,89 @@ async def test_ar_capture_rejects_too_few_images(app_client: AsyncIterator) -> N
         files=_files(rgb, depth, n_images=2),
     )
     assert resp.status_code == 422, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for e2e tests
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def work_in_tmp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    monkeypatch.setenv("BLOCKTOOL_RECON_ROOT", str(tmp_path))
+    yield tmp_path
+
+
+# ---------------------------------------------------------------------------
+# End-to-end: POST → worker → GLB asset
+# ---------------------------------------------------------------------------
+def test_ar_capture_end_to_end(work_in_tmp: Path, app_client) -> None:
+    """POST a recognized FEILE 2x4 bundle -> run the worker in-process ->
+    assert a canonical GLB asset with pipeline_used == 'ar_recognized'."""
+    from app.config import settings
+    from db.models import Asset, Job
+    from db.session import async_session_factory
+    from workers.tasks.reconstruct import reconstruct
+
+    rgb, depth, meta = make_ar_bundle("feile", 2, 4)
+    resp = asyncio.get_event_loop().run_until_complete(
+        app_client.post(
+            "/api/v1/ar-captures",
+            data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+            files=_files(rgb, depth),
+        )
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["status"] == "recognized"
+    capture_id = body["capture_id"]
+    job_id = body["job_id"]
+
+    result = reconstruct.apply(args=[capture_id])
+    assert result.successful() or result.state == "SUCCESS", result.state
+
+    async def _state() -> tuple[Job | None, list[Asset]]:
+        f = async_session_factory()
+        async with f() as session:
+            from sqlalchemy import select
+            from sqlalchemy.orm import selectinload
+
+            stmt = select(Job).where(Job.id == uuid.UUID(job_id)).options(selectinload(Job.assets))
+            job = (await session.execute(stmt)).scalar_one_or_none()
+            return job, list(job.assets) if job else []
+
+    job, assets = asyncio.run(_state())
+    assert job is not None and job.status == "completed", job
+    assert len(assets) == 1
+    meta_out = assets[0].meta
+    assert meta_out["pipeline_used"] == "ar_recognized"
+    assert meta_out["system"] == "feile"
+    assert meta_out["units_x"] == 2 and meta_out["units_y"] == 4
+    assert meta_out["input_image_count"] == 0
+    # FEILE 2x4: bbox_max.x = 16mm, bbox_max.y = 32mm.
+    assert abs(meta_out["bbox_max"][0] - 16.0) < 0.5, meta_out["bbox_max"]
+    assert abs(meta_out["bbox_max"][1] - 32.0) < 0.5, meta_out["bbox_max"]
+
+    # GLB is a real binary glTF in MinIO.
+    with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
+        tmp_path = Path(tmp.name)
+    try:
+        from minio import Minio
+
+        client = Minio(
+            endpoint=_strip_scheme(settings.s3_endpoint),
+            access_key=settings.s3_access_key,
+            secret_key=settings.s3_secret_key,
+            secure=settings.s3_secure,
+        )
+        client.fget_object(settings.s3_bucket_recon, assets[0].storage_key, str(tmp_path))
+        with tmp_path.open("rb") as f:
+            assert f.read(4) == b"glTF"
+        loaded = trimesh.load(str(tmp_path), force="mesh")
+        assert isinstance(loaded, trimesh.Trimesh)
+        assert len(loaded.vertices) > 0
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+def _strip_scheme(url: str) -> str:
+    """``http://host:port`` -> ``host:port`` (minio client expects no scheme)."""
+    return url.split("://", 1)[-1] if "://" in url else url
