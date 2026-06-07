@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useJobStore } from "@stores/useJobStore";
-import { getJob, subscribeJob, type JobInfo, type JobStreamEvent } from "@lib/api";
+import {
+  getJob,
+  subscribeJob,
+  createCapture,
+  newPartId,
+  type CaptureResponse,
+  type JobInfo,
+  type JobStreamEvent,
+} from "@lib/api";
 import { StatusBadge } from "@components/StatusBadge";
 import { ProgressBar } from "@components/ProgressBar";
 import { Viewer } from "@features/viewer/Viewer";
@@ -101,10 +109,21 @@ function formatEta(seconds: number | null | undefined): string | null {
 export function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const jobId = id ?? "";
+  const navigate = useNavigate();
 
   const job = useJobStore((s) => s.jobs[jobId]);
   const updateJob = useJobStore((s) => s.updateJob);
   const addJob = useJobStore((s) => s.addJob);
+
+  // The literal route "/jobs/new" is a special case: there's no existing job
+  // and nothing to fetch / subscribe to. We render the upload stage directly
+  // with a fresh client-generated partId. For a real pending job that exists
+  // locally but has no images yet we also show the upload stage, since the
+  // user needs to attach photos before anything can happen.
+  const isNew = jobId === "new";
+  const freshPartId = useMemo(() => (isNew ? newPartId() : ""), [isNew]);
+  const isUploadStage =
+    isNew || (job?.status === "pending" && (job?.imageCount ?? 0) === 0);
 
   const [missing, setMissing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -133,6 +152,7 @@ export function JobDetail() {
 
   // Tick elapsed counter while the job is running/pending.
   useEffect(() => {
+    if (isUploadStage) return;
     if (!job || job.status === "completed" || job.status === "failed") return;
     if (startedAtRef.current === null) {
       startedAtRef.current = Date.now();
@@ -146,10 +166,11 @@ export function JobDetail() {
     // We intentionally depend only on `status` — any other change to `job`
     // (progress, stage, …) should not restart the timer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job?.status]);
+  }, [job?.status, isUploadStage]);
 
   // Initial fetch (in case user lands here without a store entry).
   useEffect(() => {
+    if (isUploadStage) return;
     if (!jobId) {
       setMissing(true);
       return;
@@ -172,10 +193,11 @@ export function JobDetail() {
       cancelled = true;
       ctrl.abort();
     };
-  }, [jobId, job, addJob]);
+  }, [jobId, job, addJob, isUploadStage]);
 
   // Subscribe to SSE updates + poll fallback.
   useEffect(() => {
+    if (isUploadStage) return;
     if (!jobId) return;
     if (job?.status === "completed" || job?.status === "failed") return;
     const ctrl = new AbortController();
@@ -197,10 +219,11 @@ export function JobDetail() {
       dispose();
       window.clearInterval(poll);
     };
-  }, [jobId, job?.status, updateJob]);
+  }, [jobId, job?.status, updateJob, isUploadStage]);
 
   // Native browser notification on terminal states.
   useEffect(() => {
+    if (isUploadStage) return;
     if (!job) return;
     if (notifiedRef.current === job.id + job.status) return;
     if (job.status !== "completed" && job.status !== "failed") return;
@@ -226,7 +249,7 @@ export function JobDetail() {
         })
         .catch(() => undefined);
     }
-  }, [job?.status, job?.id, job?.partId, job?.error, job]);
+  }, [job?.status, job?.id, job?.partId, job?.error, job, isUploadStage]);
 
   const stageDef = useMemo(() => {
     if (!job) return COLLECTING_STAGE;
@@ -236,12 +259,47 @@ export function JobDetail() {
 
   const etaText = useMemo(() => formatEta(job?.etaSeconds), [job?.etaSeconds]);
 
+  // ----- Upload stage (new job or pending-with-no-images) -----
+  if (isUploadStage) {
+    const partIdForStage = isNew ? freshPartId : job?.partId ?? "";
+    const breadcrumbLabel = isNew ? "新模型" : partIdForStage.slice(0, 8) || "—";
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-6">
+        <Breadcrumb partId={breadcrumbLabel} />
+        <UploadStage
+          partId={partIdForStage}
+          onCreated={(response) => {
+            const newJobId = response.job_id ?? response.capture_id;
+            const now = new Date().toISOString();
+            addJob({
+              id: newJobId,
+              captureId: response.capture_id,
+              partId: response.part_id,
+              status: response.status,
+              progress: 0,
+              stage: null,
+              error: null,
+              resultAssetId: null,
+              createdAt: now,
+              updatedAt: now,
+              imageCount: response.image_count,
+              captureMode: null,
+              etaSeconds: null,
+              pipelineUsed: null,
+            });
+            navigate(`/jobs/${newJobId}`);
+          }}
+        />
+      </div>
+    );
+  }
+
   if (!jobId) return <ErrorState title="任务 ID 缺失" hint="URL 不正确" />;
   if (missing) return <ErrorState title="任务不存在" hint={`本地未找到任务 ${jobId},且后端返回 404`} />;
   if (loadError) return <ErrorState title="加载任务失败" hint={loadError} />;
   if (!job) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 text-center text-slate-400" data-testid="job-loading">
+      <div className="mx-auto max-w-3xl px-4 py-10 text-center text-txt-secondary" data-testid="job-loading">
         加载中…
       </div>
     );
@@ -249,15 +307,13 @@ export function JobDetail() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
+      <Breadcrumb partId={job.partId.slice(0, 8)} />
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Link to="/" className="btn-ghost text-sm">
-          ← 返回
-        </Link>
-        <h1 className="text-lg font-medium text-slate-100">任务详情</h1>
         <StatusBadge status={job.status} />
-        <span className="text-xs text-slate-500">ID: {job.id.slice(0, 8)}</span>
+        <span className="text-xs text-txt-tertiary">ID: {job.id.slice(0, 8)}</span>
         {job.captureMode ? (
-          <span className="text-xs text-slate-500" data-testid="capture-mode-label">
+          <span className="text-xs text-txt-tertiary" data-testid="capture-mode-label">
             模式: {job.captureMode}
           </span>
         ) : null}
@@ -266,23 +322,23 @@ export function JobDetail() {
       <div
         className={clsx(
           "card mb-4 transition-colors",
-          highlight ? "ring-2 ring-primary-400 stage-highlight" : "",
+          highlight ? "ring-2 ring-accent stage-highlight" : "",
         )}
         data-testid="stage-card"
         data-stage={stageDef.key}
         data-highlight={highlight ? "true" : "false"}
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className="text-slate-200" data-testid="stage-label">
+          <span className="text-txt-primary" data-testid="stage-label">
             <span aria-hidden className="mr-1">
               {stageDef.emoji}
             </span>
             {stageDef.label}
             {job.stage && stageDef.key !== "failed" ? (
-              <span className="ml-2 text-xs text-slate-500">({job.stage})</span>
+              <span className="ml-2 text-xs text-txt-tertiary">({job.stage})</span>
             ) : null}
           </span>
-          <div className="flex items-center gap-3 text-xs text-slate-500">
+          <div className="flex items-center gap-3 text-xs text-txt-tertiary">
             <span data-testid="elapsed">已耗时 {formatElapsed(elapsed)}</span>
             {etaText ? <span data-testid="eta">{etaText}</span> : null}
           </div>
@@ -303,9 +359,9 @@ export function JobDetail() {
                 className={clsx(
                   "rounded-md border px-2 py-1.5 text-center text-[11px] transition",
                   reached
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                    : "border-slate-700 bg-slate-900/50 text-slate-500",
-                  isCurrent ? "ring-1 ring-primary-400" : "",
+                    ? "border-accent-border bg-accent-bg text-ok"
+                    : "border-border bg-card/50 text-txt-tertiary",
+                  isCurrent ? "ring-1 ring-accent" : "",
                 )}
                 data-testid={`stage-pill-${s.key}`}
                 data-active={isCurrent ? "true" : "false"}
@@ -321,13 +377,13 @@ export function JobDetail() {
         <ProgressBar value={job.progress} />
 
         {streamError ? (
-          <p className="mt-2 text-xs text-amber-400">
+          <p className="mt-2 text-xs text-warn">
             实时连接异常,已切换为轮询: {streamError}
           </p>
         ) : null}
-        {job.error ? <p className="mt-2 text-sm text-rose-400">{job.error}</p> : null}
+        {job.error ? <p className="mt-2 text-sm text-err">{job.error}</p> : null}
         {job.pipelineUsed ? (
-          <p className="mt-2 text-[11px] text-slate-500" data-testid="pipeline-label">
+          <p className="mt-2 text-[11px] text-txt-tertiary" data-testid="pipeline-label">
             pipeline: {job.pipelineUsed}
           </p>
         ) : null}
@@ -335,18 +391,126 @@ export function JobDetail() {
 
       {job.status === "completed" && job.resultAssetId ? (
         <div className="card">
-          <h2 className="mb-3 text-sm font-medium text-slate-300">3D 预览</h2>
-          <div className="aspect-square w-full overflow-hidden rounded-lg bg-slate-950 sm:aspect-video">
+          <h2 className="mb-3 text-sm font-medium text-txt-primary">3D 预览</h2>
+          <div className="aspect-square w-full overflow-hidden rounded-lg bg-[var(--camera-bg)] sm:aspect-video">
             <Viewer assetId={job.resultAssetId} />
           </div>
         </div>
       ) : job.status === "running" || job.status === "pending" ? (
-        <div className="card text-sm text-slate-400" data-testid="running-card">
+        <div className="card text-sm text-txt-secondary" data-testid="running-card">
           正在重建中,稍候片刻…
         </div>
       ) : (
-        <div className="card text-sm text-rose-400" data-testid="failed-card">任务失败,请检查日志或重试。</div>
+        <div className="card text-sm text-err" data-testid="failed-card">任务失败,请检查日志或重试。</div>
       )}
+    </div>
+  );
+}
+
+function Breadcrumb({ partId }: { partId: string }) {
+  return (
+    <nav
+      className="mb-4 flex items-center gap-2 text-sm"
+      aria-label="面包屑导航"
+      data-testid="breadcrumb"
+    >
+      <Link to="/" className="text-txt-secondary no-underline hover:text-txt-primary">
+        我的积木
+      </Link>
+      <span aria-hidden className="text-txt-tertiary">/</span>
+      <span className="font-medium text-txt-primary">{partId}</span>
+    </nav>
+  );
+}
+
+function UploadStage({
+  partId,
+  onCreated,
+}: {
+  partId: string;
+  onCreated: (response: CaptureResponse) => void;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFiles(files: FileList | null | undefined) {
+    if (!files || files.length === 0 || !partId) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("part_id", partId);
+      for (let i = 0; i < files.length; i++) {
+        formData.append("images", files[i]!);
+      }
+      const response = await createCapture(formData);
+      onCreated(response);
+    } catch (err) {
+      setError((err as Error).message ?? "上传失败");
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="card py-10 text-center">
+      <div
+        aria-hidden
+        className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-accent-bg text-accent"
+      >
+        <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="4" y="4" width="6" height="6" rx="1" />
+          <rect x="14" y="4" width="6" height="6" rx="1" />
+          <rect x="4" y="14" width="6" height="6" rx="1" />
+          <rect x="14" y="14" width="6" height="6" rx="1" />
+        </svg>
+      </div>
+      <h2 className="text-base font-medium text-txt-primary">开始你的第一个模型</h2>
+      <p className="mt-1 text-sm text-txt-secondary">
+        零件 ID: <span className="font-mono">{partId.slice(0, 8) || "—"}</span>
+      </p>
+
+      <div
+        className={clsx(
+          "mx-auto mt-6 max-w-md rounded-xl border-2 border-dashed border-border bg-page/50 p-8 transition-colors",
+          dragOver ? "border-accent bg-accent-bg/40" : "",
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!dragOver) setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => handleFiles(e.target.files)}
+          className="hidden"
+          disabled={uploading}
+          data-testid="upload-input"
+        />
+        <p className="text-sm text-txt-secondary">
+          拖拽照片到此处,或点击下方按钮选择文件
+        </p>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="btn-primary mt-4"
+          disabled={uploading}
+          data-testid="upload-button"
+        >
+          {uploading ? "上传中…" : "选择照片"}
+        </button>
+        {error ? <p className="mt-3 text-sm text-err">{error}</p> : null}
+      </div>
     </div>
   );
 }
@@ -354,8 +518,8 @@ export function JobDetail() {
 function ErrorState({ title, hint }: { title: string; hint: string }) {
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 text-center">
-      <h1 className="text-2xl font-semibold text-slate-100">{title}</h1>
-      <p className="mt-2 text-sm text-slate-400">{hint}</p>
+      <h1 className="text-2xl font-semibold text-txt-primary">{title}</h1>
+      <p className="mt-2 text-sm text-txt-secondary">{hint}</p>
       <Link to="/" className="btn-primary mt-6 inline-flex">
         返回首页
       </Link>
