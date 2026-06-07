@@ -43,6 +43,32 @@ DEFAULT_PITCH_TOLERANCE_MM: float = 3.0
 DEFAULT_MIN_CONFIDENCE: float = 0.6
 
 
+@dataclass(frozen=True)
+class RecognitionResult:
+    """Outcome of :func:`recognize_brick`. ``ok`` gates the zero-measurement path."""
+
+    ok: bool
+    units_x: int | None = None
+    units_y: int | None = None
+    pitch_mm: float | None = None
+    system: str | None = None
+    confidence: float = 0.0
+    warnings: list[str] = field(default_factory=list)
+    reason: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "units_x": self.units_x,
+            "units_y": self.units_y,
+            "pitch_mm": self.pitch_mm,
+            "system": self.system,
+            "confidence": self.confidence,
+            "warnings": list(self.warnings),
+            "reason": self.reason,
+        }
+
+
 def classify_system(
     pitch_mm: float, tolerance_mm: float = DEFAULT_PITCH_TOLERANCE_MM
 ) -> tuple[str | None, float]:
@@ -207,9 +233,89 @@ def fit_grid(centers_px: np.ndarray, *, px_pitch: float | None = None) -> tuple[
     return units_x, units_y
 
 
+def recognize_brick(
+    *,
+    rgb_bytes: bytes,
+    depth_bytes: bytes,
+    ar_metadata: dict[str, Any],
+    kind: str,
+    system_hint: str | None = None,
+    pitch_tolerance_mm: float = DEFAULT_PITCH_TOLERANCE_MM,
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+) -> RecognitionResult:
+    """Recognize a standard brick from a top-down RGB + depth + intrinsics.
+
+    Returns a :class:`RecognitionResult`. ``ok`` is True only when a
+    system is classified within tolerance AND confidence ≥
+    ``min_confidence``. ``kind`` and ``system_hint`` are accepted for
+    parity with the request contract; ``system_hint`` only contributes a
+    warning here (the endpoint decides what to do with ``"unknown"``).
+    """
+    try:
+        rgb = np.asarray(Image.open(io.BytesIO(rgb_bytes)).convert("RGB"))
+    except Exception as exc:  # noqa: BLE001 — any decode failure is a soft "not ok"
+        return RecognitionResult(ok=False, reason=f"cannot decode recognition_rgb: {exc}")
+
+    centers = detect_studs(rgb)
+    if centers.shape[0] < 2:
+        return RecognitionResult(ok=False, reason=f"detected {centers.shape[0]} studs (need ≥ 2)")
+
+    px_pitch = _median_nn_distance(centers)
+    units_x, units_y = fit_grid(centers, px_pitch=px_pitch)
+
+    try:
+        depth = load_depth16_png(depth_bytes)
+    except Exception as exc:  # noqa: BLE001
+        return RecognitionResult(
+            ok=False, units_x=units_x, units_y=units_y, reason=f"cannot decode depth: {exc}"
+        )
+
+    frame = ar_metadata.get("recognition_frame") if isinstance(ar_metadata, dict) else None
+    intrinsics = frame.get("image_intrinsics") if isinstance(frame, dict) else None
+    if not isinstance(intrinsics, dict) or not {"fx", "fy", "cx", "cy", "width", "height"} <= set(
+        intrinsics
+    ):
+        return RecognitionResult(
+            ok=False,
+            units_x=units_x,
+            units_y=units_y,
+            reason="ar_metadata.recognition_frame.image_intrinsics missing/incomplete",
+        )
+
+    pitch_mm = metric_pitch(centers, depth, intrinsics)
+    if pitch_mm is None:
+        return RecognitionResult(
+            ok=False, units_x=units_x, units_y=units_y, reason="no valid depth at stud centres"
+        )
+
+    system, confidence = classify_system(pitch_mm, pitch_tolerance_mm)
+    warnings: list[str] = []
+    if system is not None:
+        canonical = SYSTEM_UNIT_MM[system]
+        warnings.append(
+            f"measured pitch {pitch_mm:.2f}mm vs {system} canonical {canonical}mm "
+            f"(Δ{abs(pitch_mm - canonical):.2f})"
+        )
+    if system_hint and system_hint not in ("", "unknown") and system and system_hint != system:
+        warnings.append(f"system_hint={system_hint!r} but classified {system!r}")
+
+    ok = system is not None and confidence >= min_confidence
+    return RecognitionResult(
+        ok=ok,
+        units_x=units_x,
+        units_y=units_y,
+        pitch_mm=round(pitch_mm, 3),
+        system=system,
+        confidence=round(confidence, 3),
+        warnings=warnings,
+        reason=None if ok else "pitch did not match a known system within tolerance/confidence",
+    )
+
+
 __all__ = [
     "DEFAULT_MIN_CONFIDENCE",
     "DEFAULT_PITCH_TOLERANCE_MM",
+    "RecognitionResult",
     "SYSTEM_UNIT_MM",
     "classify_system",
     "detect_studs",
@@ -217,4 +323,5 @@ __all__ = [
     "fit_grid",
     "load_depth16_png",
     "metric_pitch",
+    "recognize_brick",
 ]

@@ -118,3 +118,69 @@ def test_fit_grid_counts_rows_and_cols() -> None:
     found = detect_studs(img)
     units_x, units_y = fit_grid(found)
     assert (units_x, units_y) == (2, 4)
+
+
+def _ar_bundle(system: str = "feile", units_x: int = 2, units_y: int = 4):
+    """Build (rgb_bytes, depth_bytes, ar_metadata) that recognizes as ``system``.
+
+    Picks fx so px_pitch * Z / fx == SYSTEM_UNIT_MM[system].
+    """
+    from services.brick_recognizer import SYSTEM_UNIT_MM, encode_depth16_png
+
+    w, h, px_pitch, z = 640, 480, 80.0, 250.0
+    fx = px_pitch * z / SYSTEM_UNIT_MM[system]
+    cx, cy = w / 2.0, h / 2.0
+    centers: list[tuple[int, int]] = []
+    for i in range(units_x):
+        for j in range(units_y):
+            x = int(cx + (i - (units_x - 1) / 2.0) * px_pitch)
+            y = int(cy + (j - (units_y - 1) / 2.0) * px_pitch)
+            centers.append((x, y))
+    rgb = _draw_studs(w, h, centers, radius=12)
+    rgb_buf = io.BytesIO()
+    Image.fromarray(rgb).save(rgb_buf, format="PNG")
+    depth = np.full((h // 4, w // 4), int(z), dtype=np.uint16)  # quarter-res, constant
+    meta = {
+        "device": {"model": "TEST", "arcore": "x"},
+        "recognition_frame": {
+            "image_intrinsics": {"fx": fx, "fy": fx, "cx": cx, "cy": cy, "width": w, "height": h},
+            "depth": {"width": w // 4, "height": h // 4, "format": "DEPTH16_MM"},
+            "camera_pose": {"t": [0, 0, 0], "q": [0, 0, 0, 1]},
+            "distance_m": z / 1000.0,
+        },
+        "coarse_hints": {"rough_units_x": units_x, "rough_units_y": units_y, "rough_pitch_mm": 0},
+    }
+    return rgb_buf.getvalue(), encode_depth16_png(depth), meta
+
+
+def test_recognize_brick_feile_2x4() -> None:
+    from services.brick_recognizer import recognize_brick
+
+    rgb, depth, meta = _ar_bundle("feile", 2, 4)
+    r = recognize_brick(rgb_bytes=rgb, depth_bytes=depth, ar_metadata=meta, kind="brick")
+    assert r.ok is True
+    assert r.system == "feile"
+    assert (r.units_x, r.units_y) == (2, 4)
+    assert abs(r.pitch_mm - 16.0) < 0.3
+    assert r.confidence >= 0.6
+
+
+def test_recognize_brick_unknown_pitch_not_ok() -> None:
+    from services.brick_recognizer import recognize_brick
+
+    rgb, depth, meta = _ar_bundle("feile", 2, 2)
+    # Corrupt the focal length so the pitch lands at ~12mm (between systems).
+    meta["recognition_frame"]["image_intrinsics"]["fx"] = 80.0 * 250.0 / 12.0
+    meta["recognition_frame"]["image_intrinsics"]["fy"] = 80.0 * 250.0 / 12.0
+    r = recognize_brick(rgb_bytes=rgb, depth_bytes=depth, ar_metadata=meta, kind="brick")
+    assert r.ok is False
+    assert r.system is None
+
+
+def test_recognize_brick_bad_rgb_not_ok() -> None:
+    from services.brick_recognizer import recognize_brick
+
+    _, depth, meta = _ar_bundle("feile")
+    r = recognize_brick(rgb_bytes=b"not-a-png", depth_bytes=depth, ar_metadata=meta, kind="brick")
+    assert r.ok is False
+    assert r.reason is not None
