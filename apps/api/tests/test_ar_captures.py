@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 import trimesh
-
 from fixtures.synth_studs import make_ar_bundle
 
 

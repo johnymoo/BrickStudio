@@ -45,7 +45,7 @@ def test_run_ar_recognized_pipeline_builds_canonical_glb(work_in_tmp: Path) -> N
     asyncio.run(_seed())
 
     class _FakeTask:
-        def update_state(self, **_: object) -> None:  # noqa: D401
+        def update_state(self, **_: object) -> None:
             pass
 
     result = _run_ar_recognized_pipeline(_FakeTask(), capture_id, job_id)

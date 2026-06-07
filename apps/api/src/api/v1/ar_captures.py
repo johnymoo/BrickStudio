@@ -59,12 +59,12 @@ _MEASUREMENT_FIELDS = [
     "brick_height_total_mm",
 ]
 _GUIDANCE = (
-    "无法自动识别。请用游标卡尺测 5 个值并提交到 /api/v1/parametric-blocks："
-    "1A=卡两端最外侧凸点外缘的总跨距 (outer_pitch_mm)；"
-    "1B=相邻两凸点之间最窄缝隙 (inner_pitch_mm)；"
-    "③=任一凸点外径 (stud_diameter_mm)；"
-    "②=底面到砖体顶面(不含凸点)的净高 (brick_height_net_mm)；"
-    "④=底面到凸点顶的总高 (brick_height_total_mm)。卡'可夹的实边'，不要找凸点中心。"
+    "无法自动识别。请用游标卡尺测 5 个值并提交到 /api/v1/parametric-blocks："  # noqa: RUF001
+    "1A=卡两端最外侧凸点外缘的总跨距 (outer_pitch_mm)；"  # noqa: RUF001
+    "1B=相邻两凸点之间最窄缝隙 (inner_pitch_mm)；"  # noqa: RUF001
+    "③=任一凸点外径 (stud_diameter_mm)；"  # noqa: RUF001
+    "②=底面到砖体顶面(不含凸点)的净高 (brick_height_net_mm)；"  # noqa: RUF001
+    "④=底面到凸点顶的总高 (brick_height_total_mm)。卡'可夹的实边'，不要找凸点中心。"  # noqa: RUF001
 )
 
 

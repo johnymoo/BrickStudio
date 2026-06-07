@@ -2,7 +2,7 @@
 
 Given a top-down stud photo + a 16-bit depth map + camera intrinsics
 (all uploaded by the ARCore client), recognize a standard building
-block: its system (lego / feile / duplo), stud grid (units_x × units_y),
+block: its system (lego / feile / duplo), stud grid (units_x x units_y),
 and metric stud pitch. When the pitch matches a known system within
 tolerance, the caller generates the exact canonical parametric GLB with
 zero caliper input.
@@ -155,8 +155,8 @@ def metric_pitch(
     sy = dh / ih
     pts3d: list[list[float]] = []
     for u, v in centers:
-        du = int(round(u * sx))
-        dv = int(round(v * sy))
+        du = round(u * sx)
+        dv = round(v * sy)
         du = min(max(du, 0), dw - 1)
         dv = min(max(dv, 0), dh - 1)
         z = float(depth_mm[dv, du])
@@ -253,7 +253,7 @@ def recognize_brick(
     """
     try:
         rgb = np.asarray(Image.open(io.BytesIO(rgb_bytes)).convert("RGB"))
-    except Exception as exc:  # noqa: BLE001 — any decode failure is a soft "not ok"
+    except Exception as exc:  # any decode failure is a soft "not ok"
         return RecognitionResult(ok=False, reason=f"cannot decode recognition_rgb: {exc}")
 
     centers = detect_studs(rgb)
@@ -265,7 +265,7 @@ def recognize_brick(
 
     try:
         depth = load_depth16_png(depth_bytes)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return RecognitionResult(
             ok=False, units_x=units_x, units_y=units_y, reason=f"cannot decode depth: {exc}"
         )
@@ -315,8 +315,8 @@ def recognize_brick(
 __all__ = [
     "DEFAULT_MIN_CONFIDENCE",
     "DEFAULT_PITCH_TOLERANCE_MM",
-    "RecognitionResult",
     "SYSTEM_UNIT_MM",
+    "RecognitionResult",
     "classify_system",
     "detect_studs",
     "encode_depth16_png",
