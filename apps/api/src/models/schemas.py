@@ -179,6 +179,56 @@ class ParametricBlockRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# AR capture recognition (v0.5)
+# ---------------------------------------------------------------------------
+class RecognizedBlock(BaseModel):
+    """The recognizer's classification of an AR capture."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    system: str | None = None
+    kind: str
+    units_x: int | None = None
+    units_y: int | None = None
+    pitch_mm: float | None = None
+    confidence: float = 0.0
+
+
+class NeedsMeasurement(BaseModel):
+    """Returned when recognition confidence is too low — caliper fallback."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The 5 caliper fields the client should collect (same as
+    #: ``/parametric-blocks``).
+    fields: list[str] = Field(default_factory=list)
+    #: Human-readable, caliper-friendly guidance ("卡两端外边缘…").
+    guidance: str
+    #: Where to submit the measured fallback.
+    endpoint: str = "/api/v1/parametric-blocks"
+    #: Why recognition fell back (for logs / UI).
+    reason: str | None = None
+
+
+class ArCaptureRead(BaseModel):
+    """Response shape for ``POST /api/v1/ar-captures``."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    capture_id: UUID
+    part_id: str
+    #: ``"recognized"`` (a GLB job was dispatched) or
+    #: ``"needs_measurement"`` (no job; client falls back to caliper).
+    status: Literal["recognized", "needs_measurement"]
+    mode: str = "ar_recognized"
+    recognized: RecognizedBlock
+    needs_measurement: NeedsMeasurement | None = None
+    job_id: UUID | None = None
+    warnings: list[str] = Field(default_factory=list)
+    created_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Asset
 # ---------------------------------------------------------------------------
 class AssetRead(BaseModel):
@@ -228,6 +278,7 @@ class ErrorEnvelope(BaseModel):
 
 
 __all__ = [
+    "ArCaptureRead",
     "AssetRead",
     "CaptureCreate",
     "CaptureRead",
@@ -235,6 +286,8 @@ __all__ = [
     "ErrorEnvelope",
     "HealthRead",
     "JobRead",
+    "NeedsMeasurement",
     "ParametricBlockRead",
     "ParametricBlockRequest",
+    "RecognizedBlock",
 ]

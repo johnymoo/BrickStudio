@@ -184,3 +184,27 @@ def test_recognize_brick_bad_rgb_not_ok() -> None:
     r = recognize_brick(rgb_bytes=b"not-a-png", depth_bytes=depth, ar_metadata=meta, kind="brick")
     assert r.ok is False
     assert r.reason is not None
+
+
+def test_ar_capture_read_schema_serializes() -> None:
+    import uuid
+    from datetime import UTC, datetime
+
+    from models.schemas import ArCaptureRead, RecognizedBlock
+
+    body = ArCaptureRead(
+        capture_id=uuid.uuid4(),
+        part_id="feile-brick-2x4",
+        status="recognized",
+        recognized=RecognizedBlock(
+            system="feile", kind="brick", units_x=2, units_y=4, pitch_mm=16.1, confidence=0.96
+        ),
+        needs_measurement=None,
+        job_id=uuid.uuid4(),
+        warnings=["measured pitch 16.10mm vs feile canonical 16.0mm (Δ0.10)"],
+        created_at=datetime.now(tz=UTC),
+    )
+    dumped = body.model_dump(mode="json")
+    assert dumped["status"] == "recognized"
+    assert dumped["recognized"]["system"] == "feile"
+    assert dumped["needs_measurement"] is None
