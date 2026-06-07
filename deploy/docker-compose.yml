@@ -47,7 +47,7 @@ services:
       - pg_data:/var/lib/postgresql/data
     networks: [blocknet]
     ports:
-      - "127.0.0.1:5432:5432"
+      - "0.0.0.0:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -65,7 +65,7 @@ services:
       - redis_data:/data
     networks: [blocknet]
     ports:
-      - "127.0.0.1:6379:6379"
+      - "0.0.0.0:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -134,7 +134,7 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "127.0.0.1:${API_PORT:-8000}:8000"
+      - "0.0.0.0:${API_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
       interval: 30s
@@ -198,7 +198,7 @@ services:
     restart: unless-stopped
     networks: [blocknet]
     ports:
-      - "127.0.0.1:${WEB_DEV_PORT:-8080}:80"
+      - "0.0.0.0:${WEB_DEV_PORT:-8080}:80"
     depends_on:
       api:
         condition: service_healthy
