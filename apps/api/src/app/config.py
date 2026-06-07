@@ -124,6 +124,27 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ---- AR capture recognition (v0.5) -------------------------------------
+    ar_pitch_tolerance_mm: float = Field(
+        default=3.0,
+        gt=0,
+        description=(
+            "Max |measured pitch − canonical unit| (mm) for a system "
+            "classification to count. LEGO 8 / FEILE 16 / DUPLO 20 are "
+            "≥4mm apart, so 3mm absorbs AR depth noise without aliasing."
+        ),
+    )
+    ar_min_confidence: float = Field(
+        default=0.6,
+        ge=0,
+        le=1,
+        description=(
+            "Min recognizer confidence (0..1, = 1 − Δ/tolerance) to take "
+            "the zero-measurement path. Below this the endpoint returns "
+            "needs_measurement and the client falls back to /parametric-blocks."
+        ),
+    )
+
     # ---- Celery ------------------------------------------------------------
     celery_broker_url: str | None = Field(
         default=None,
