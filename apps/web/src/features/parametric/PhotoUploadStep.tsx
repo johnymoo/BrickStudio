@@ -89,7 +89,7 @@ export function PhotoUploadStep({ photos, onChange, onNext }: PhotoUploadStepPro
                 <button
                   type="button"
                   onClick={() => removePhoto(i)}
-                  className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/30 hover:bg-rose-500"
+                  className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/30 hover:bg-err"
                   aria-label={`删除第 ${i + 1} 张`}
                   data-testid={`photo-remove-${i + 1}`}
                 >
