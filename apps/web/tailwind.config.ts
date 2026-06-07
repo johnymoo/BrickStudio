@@ -6,18 +6,38 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: {
-          50: "#f0f9ff",
-          100: "#e0f2fe",
-          500: "#0ea5e9",
-          600: "#0284c7",
-          700: "#0369a1",
+        page: "var(--bg-page)",
+        card: "var(--bg-card)",
+        border: "var(--border)",
+        accent: {
+          DEFAULT: "var(--accent)",
+          light: "var(--accent-light)",
+          bg: "var(--accent-bg)",
+          border: "var(--accent-border)",
+        },
+        secondary: "var(--secondary)",
+        txt: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          tertiary: "var(--text-tertiary)",
+        },
+        ok: {
+          DEFAULT: "var(--success)",
+          bg: "var(--success-bg)",
+        },
+        warn: {
+          DEFAULT: "var(--warning)",
+          bg: "var(--warning-bg)",
+        },
+        err: {
+          DEFAULT: "var(--error)",
+          bg: "var(--error-bg)",
         },
       },
       fontFamily: {
         sans: [
+          "system-ui",
           "-apple-system",
-          "BlinkMacSystemFont",
           "PingFang SC",
           "Hiragino Sans GB",
           "Microsoft YaHei",
