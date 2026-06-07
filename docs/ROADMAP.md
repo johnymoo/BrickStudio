@@ -1,4 +1,4 @@
-# 积木建模工具 — 路线图 (v0.1 → v0.4)
+# 积木建模工具 — 路线图 (v0.1 → v0.5)
 
 > 项目代号 **BrickStudio**。本文件维护"接下来要做什么、做到什么程度算完"。
 
@@ -10,6 +10,7 @@
 | v0.2 拍照 UX + SfM 重建 | ✅ 已发布 | 智能拍照 N 张, COLMAP docker 集成, Open3D fallback ≥8 张, Playwright E2E | `cb94a76` |
 | v0.3 参数化建模 demo | ✅ 已发布 | BlockGenerator 16/16 GLB (4 kind × 2 system × 2 size), 13 张真照片 baseline, Delaunay fallback, FEILE 体系 + raw 5 字段 CLI | `dd191d3` · `0aa8075` |
 | v0.4 建模板块集成 (App 端) | ✅ 已发布 | POST /parametric-blocks, captures.mode 分流 worker, 4 步 wizard (`/parametric`), 53 vitest + 4 playwright, 用户指南 + slope 卡尺图 | `cc9bd29` · `14662cb` · `bc9f642` · `f06e38f` |
+| v0.5 AR 采集识别 (后端) | ✅ 已实现 | `POST /ar-captures` 同步识别 + `brick_recognizer` 纯函数 + worker `ar_recognized` 分流 + 17 新测试 | `d6e4f37` |
 
 ## 1. v0.1 基础后端 (✅)
 
@@ -99,7 +100,19 @@ v0.4 把 v0.3 离线 demo 接到 App 端: 用户走 `/parametric` 4 步 wizard, 
 
 **当前最该做的** (用户原话): 接 P1 零件库 (Part / Variant / Color), 让用户能存自己的 brick 库, 跨 capture 复用。
 
-## 5. 文档地图
+## 5. v0.5 AR 采集识别 — 后端 (✅ 已实现)
+
+ARCore 手机上传 top-down 凸点照片 + 16-bit 深度 + 相机内参, 后端同步识别积木 (system / kind / stud grid), 置信度够时直接生成标准 GLB (零卡尺输入); 不够时返回 `needs_measurement` 回退到 `/parametric-blocks` 卡尺路径。
+
+**已完成**:
+- `services/brick_recognizer.py` — 7 个纯函数 (`classify_system` / `detect_studs` / `fit_grid` / `metric_pitch` / `recognize_brick` / `encode_depth16_png` / `load_depth16_png`), 无手机/GPU/DB 依赖, 14 个单元测试。
+- `POST /api/v1/ar-captures` — multipart 上传 (RGB + depth + ar_metadata JSON + 角度照片), 同步识别, 201 返回 `recognized` 或 `needs_measurement`。
+- Worker `_run_ar_recognized_pipeline` — 从 Capture 行读 system/kind/units → `BlockSpec` → `export_glb` → `_finalize_mesh_pipeline`, 复用 parametric 路径的 mesh pipeline。
+- DB: `captures` 表加 `ar_metadata` + `recognition_result` JSONB 列 (migration `0004`)。
+- Config: `ar_pitch_tolerance_mm` (3.0mm) + `ar_min_confidence` (0.6)。
+- Tests: 14 单元 + 3 端点校验 + 1 worker + 1 e2e (POST → worker → GLB), MinIO 集成测试受环境影响。
+
+## 6. 文档地图
 
 - `docs/design.md` — 总体设计 (阶段一契约)
 - `docs/design-phase2.md` — 阶段二契约 (拍照 UX + SfM)
@@ -109,4 +122,6 @@ v0.4 把 v0.3 离线 demo 接到 App 端: 用户走 `/parametric` 4 步 wizard, 
 - `docs/measure-block-slope.svg` — slope 卡尺 5 点 (v0.4 新增)
 - `docs/capture-procedure.svg` — 采集流程图
 - `deliverable.md` / `apps/api/deliverable-pipeline.md` / `apps/web/deliverable.md` — 阶段交付物
+- `docs/ar-capture-recognition-design.md` — AR 采集识别设计规格 (v0.5)
+- `docs/ar-capture-recognition-plan.md` — AR 采集识别实现计划 (v0.5)
 - `apps/api/README.md` / `apps/web/README.md` — 模块自述
