@@ -246,6 +246,8 @@ def reconstruct(self: Any, capture_id: str | uuid.UUID) -> dict[str, Any]:
         mode = _run_async(_get_capture_mode(capture_uuid))
         if mode == "parametric_block":
             result = _run_parametric_pipeline(self, capture_uuid, job_id)
+        elif mode == "ar_recognized":
+            result = _run_ar_recognized_pipeline(self, capture_uuid, job_id)
         else:
             result = _run_pipeline(self, capture_uuid, job_id)
         _run_async(_set_job_completed(job_id))
@@ -463,6 +465,92 @@ def _run_parametric_pipeline(
             "raw_measurements_mm": capture.raw_measurements_mm,
             "derived_spec_mm": capture.derived_spec_mm,
             "cross_check_warnings": capture.cross_check_warnings or [],
+        },
+    )
+
+
+def _run_ar_recognized_pipeline(
+    self: Any,
+    capture_uuid: uuid.UUID,
+    job_id: uuid.UUID,
+) -> dict[str, Any]:
+    """AR-recognized path: canonical ``BlockSpec`` → ``export_glb`` → upload.
+
+    The route layer already ran recognition synchronously and stored
+    ``system`` / ``kind`` / ``units_x`` / ``units_y`` (+ the audit blob
+    in ``recognition_result``) on the capture row. This pipeline builds
+    the *canonical* spec for that system/kind/units — NO measurement
+    overrides, since a recognized standard part is fully described by its
+    public spec — and emits the GLB. Mirrors
+    :func:`_run_parametric_pipeline`, minus the derived-measurement
+    overrides.
+    """
+    work_dir = _recon_root() / str(capture_uuid)
+    output_dir = work_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / "input").mkdir(parents=True, exist_ok=True)
+
+    started = time.monotonic()
+    _emit_progress(self, job_id, progress=10, stage="building_spec", eta_seconds=None)
+
+    async def _load_capture() -> Capture:
+        f = async_session_factory()
+        async with f() as session:
+            cap = await session.get(Capture, capture_uuid)
+            if cap is None:
+                raise RuntimeError(
+                    f"capture {capture_uuid} not in DB "
+                    "(should have been created by the route layer)"
+                )
+            session.expunge(cap)
+            return cap
+
+    capture = asyncio.run(_load_capture())
+    if capture.mode != "ar_recognized":
+        raise RuntimeError(
+            f"_run_ar_recognized_pipeline called for capture {capture_uuid} "
+            f"with mode={capture.mode!r}"
+        )
+
+    spec = BlockSpec(
+        system=capture.system or "duplo",
+        kind=capture.kind or "brick",
+        units_x=int(capture.units_x or 2),
+        units_y=int(capture.units_y or 2),
+    )
+
+    _emit_progress(
+        self, job_id, progress=40, stage="generating_mesh", eta_seconds=_eta_seconds(started, 40)
+    )
+
+    glb_path = output_dir / "mesh.glb"
+    result = export_glb(spec, glb_path)
+    result["pipeline_used"] = "ar_recognized"
+    result["pipeline_version"] = "brick_recognizer-0.1.0"
+    result["blender_used"] = None
+
+    elapsed = time.monotonic() - started
+    logger.info(
+        "reconstruct.ar_recognized: job %s system=%s kind=%s units=%dx%d elapsed=%.2fs",
+        job_id, spec.system, spec.kind, spec.units_x, spec.units_y, elapsed,
+    )
+
+    return _finalize_mesh_pipeline(
+        self,
+        capture_uuid=capture_uuid,
+        job_id=job_id,
+        work_dir=work_dir,
+        output_dir=output_dir,
+        result=result,
+        started=started,
+        pipeline_used="ar_recognized",
+        n_images=0,
+        extra_meta={
+            "system": spec.system,
+            "kind": spec.kind,
+            "units_x": spec.units_x,
+            "units_y": spec.units_y,
+            "recognition_result": capture.recognition_result,
         },
     )
 
