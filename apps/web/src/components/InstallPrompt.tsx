@@ -37,7 +37,7 @@ export function InstallPrompt() {
       className="fixed bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full border border-border bg-card/95 px-4 py-2 text-sm shadow-lg"
       data-testid="install-prompt"
     >
-      <span className="text-slate-200">将积木工具添加到主屏幕</span>
+      <span className="text-txt-primary">将 BrickStudio 添加到主屏幕</span>
       <button
         type="button"
         className="btn-primary px-3 py-1 text-xs"
