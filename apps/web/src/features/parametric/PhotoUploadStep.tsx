@@ -43,18 +43,18 @@ export function PhotoUploadStep({ photos, onChange, onNext }: PhotoUploadStepPro
 
   return (
     <div className="card" data-testid="step-photos">
-      <h2 className="mb-2 text-sm font-medium text-slate-300">步骤 1/4 — 上传对比照片 (可选)</h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <h2 className="mb-2 text-sm font-medium text-txt-primary">步骤 1/4 — 上传对比照片 (可选)</h2>
+      <p className="mb-3 text-xs text-txt-tertiary">
         照片不参与建模, 仅用于步骤 4 跟生成 GLB 并排对比 (实物校准)。 0 张也能直接进入下一步。
       </p>
 
       <label
-        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-700 bg-slate-900/40 px-4 py-8 text-center text-sm text-slate-400 transition hover:border-primary-500 hover:text-slate-200"
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-card px-4 py-8 text-center text-sm text-txt-secondary transition hover:border-accent hover:text-txt-primary"
         data-testid="photo-dropzone"
       >
         <span aria-hidden className="text-2xl">📷</span>
         <span>点击或拖拽图片到此处</span>
-        <span className="text-[11px] text-slate-500">最多 {MAX_PHOTOS} 张 · 已选 {photos.length}</span>
+        <span className="text-[11px] text-txt-tertiary">最多 {MAX_PHOTOS} 张 · 已选 {photos.length}</span>
         <input
           ref={fileInputRef}
           type="file"
@@ -80,7 +80,7 @@ export function PhotoUploadStep({ photos, onChange, onNext }: PhotoUploadStepPro
             return (
               <li
                 key={`${p.name}-${i}`}
-                className="relative aspect-square overflow-hidden rounded-md border border-slate-700"
+                className="relative aspect-square overflow-hidden rounded-md border border-border"
                 data-testid={`photo-${i + 1}`}
               >
                 {/* The url is fine for the session; revoking on unmount is the
@@ -116,12 +116,12 @@ export function PhotoUploadStep({ photos, onChange, onNext }: PhotoUploadStepPro
       ) : null}
 
       <div className="mt-4 flex items-center justify-between">
-        <p className={clsx("text-xs", photos.length === 0 ? "text-slate-500" : "text-emerald-400")}>
+        <p className={clsx("text-xs", photos.length === 0 ? "text-txt-tertiary" : "text-ok")}>
           {photos.length === 0 ? "跳过 → 直接进入测量" : `已选 ${photos.length} 张`}
         </p>
         <button
           type="button"
-          className="btn-primary text-sm"
+          className="btn-primary rounded-full text-sm"
           data-testid="step1-next"
           onClick={onNext}
         >

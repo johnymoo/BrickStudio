@@ -121,20 +121,20 @@ export function ParametricPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-4 flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold text-slate-100">建模板块</h1>
-        <span className="text-xs text-slate-500">拍照 / 测量 / 参数化生成</span>
+        <h1 className="text-xl font-semibold text-txt-primary">建模板块</h1>
+        <span className="text-xs text-txt-tertiary">拍照 / 测量 / 参数化生成</span>
       </div>
 
       <Stepper step={step} onSelect={(s) => s < step && goTo(s)} />
 
       {submitError ? (
         <div
-          className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300"
+          className="mt-4 rounded-md border border-err bg-err-bg p-3 text-sm text-err"
           data-testid="submit-error-banner"
           role="alert"
         >
           <p className="font-medium">提交失败</p>
-          <p className="mt-0.5 text-xs text-rose-400">{submitError}</p>
+          <p className="mt-0.5 text-xs text-err">{submitError}</p>
         </div>
       ) : null}
 
@@ -198,8 +198,9 @@ function Stepper({ step, onSelect }: StepperProps) {
   return (
     <ol className="flex items-center gap-2" data-testid="wizard-stepper" data-active-step={step}>
       {([1, 2, 3, 4] as WizardStep[]).map((s, i) => {
-        const reached = s <= step;
+        const completed = s < step;
         const active = s === step;
+        const reached = completed || active;
         return (
           <li key={s} className="flex flex-1 items-center gap-2" data-testid={`stepper-${s}`}>
             <button
@@ -211,20 +212,25 @@ function Stepper({ step, onSelect }: StepperProps) {
               className={clsx(
                 "grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-semibold transition",
                 active
-                  ? "bg-primary-500 text-white ring-2 ring-primary-400/40"
-                  : reached
-                    ? "bg-emerald-500/20 text-emerald-300"
-                    : "bg-slate-800 text-slate-500",
-                s > step ? "cursor-not-allowed" : "cursor-pointer hover:ring-1 hover:ring-slate-500",
+                  ? "bg-accent text-white dark:text-page"
+                  : completed
+                    ? "bg-ok-bg text-ok"
+                    : "bg-[var(--border-subtle)] text-txt-tertiary",
+                s > step ? "cursor-not-allowed" : "cursor-pointer",
               )}
               aria-current={active ? "step" : undefined}
             >
-              {reached && !active ? "✓" : s}
+              {completed ? "✓" : s}
             </button>
-            <span className={clsx("text-xs", active ? "text-slate-100" : "text-slate-500")}>
+            <span className={clsx("text-xs", active ? "text-txt-primary" : "text-txt-tertiary")}>
               {STEP_LABELS[s]}
             </span>
-            {i < 3 ? <span className="ml-1 h-px flex-1 bg-slate-800" aria-hidden /> : null}
+            {i < 3 ? (
+              <span
+                className={clsx("ml-1 h-px flex-1", completed ? "bg-accent" : "bg-border")}
+                aria-hidden
+              />
+            ) : null}
           </li>
         );
       })}

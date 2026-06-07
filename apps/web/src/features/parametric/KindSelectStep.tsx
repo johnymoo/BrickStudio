@@ -63,14 +63,14 @@ export function KindSelectStep({
 
   return (
     <div className="card" data-testid="step-kind">
-      <h2 className="mb-2 text-sm font-medium text-slate-300">步骤 2/4 — 选择规格</h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <h2 className="mb-2 text-sm font-medium text-txt-primary">步骤 2/4 — 选择规格</h2>
+      <p className="mb-3 text-xs text-txt-tertiary">
         选体系 (公制) → 选类型 → 选尺寸。最终尺寸由步骤 3 的 5 个 caliper 数字反算, 这里只标 stud 排数。
       </p>
 
       {/* system picker */}
       <fieldset className="mb-4" data-testid="system-fieldset">
-        <legend className="mb-1.5 text-xs text-slate-400">体系 (system)</legend>
+        <legend className="mb-1.5 text-xs text-txt-secondary">体系 (system)</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="体系">
           {BRICK_SYSTEMS.map((s) => {
             const active = s.value === system;
@@ -86,12 +86,12 @@ export function KindSelectStep({
                 className={clsx(
                   "rounded-md border px-2 py-2 text-left text-xs transition",
                   active
-                    ? "border-primary-500 bg-primary-500/15 text-primary-100"
-                    : "border-slate-700 bg-slate-900/50 text-slate-300 hover:border-slate-500",
+                    ? "border-accent bg-accent-bg text-accent font-medium"
+                    : "border-border bg-card text-txt-secondary hover:border-accent",
                 )}
               >
                 <span className="block text-sm font-medium">{s.label}</span>
-                <span className="mt-0.5 block text-[10px] text-slate-500">{s.hint}</span>
+                <span className="mt-0.5 block text-[10px] text-txt-tertiary">{s.hint}</span>
               </button>
             );
           })}
@@ -100,7 +100,7 @@ export function KindSelectStep({
 
       {/* kind picker */}
       <fieldset className="mb-4">
-        <legend className="mb-1.5 text-xs text-slate-400">类型 (kind)</legend>
+        <legend className="mb-1.5 text-xs text-txt-secondary">类型 (kind)</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="类型">
           {kindOptions.map((k) => {
             const active = k.value === effectiveKind;
@@ -116,15 +116,15 @@ export function KindSelectStep({
                 className={clsx(
                   "rounded-md border px-2 py-2 text-center text-xs transition",
                   active
-                    ? "border-primary-500 bg-primary-500/15 text-primary-100"
-                    : "border-slate-700 bg-slate-900/50 text-slate-300 hover:border-slate-500",
+                    ? "border-accent bg-accent-bg text-accent font-medium"
+                    : "border-border bg-card text-txt-secondary hover:border-accent",
                 )}
               >
                 <span aria-hidden className="block text-xl">
                   {k.icon}
                 </span>
                 <span className="mt-1 block text-xs font-medium">{k.label}</span>
-                <span className="mt-0.5 block text-[10px] text-slate-500">{k.hint}</span>
+                <span className="mt-0.5 block text-[10px] text-txt-tertiary">{k.hint}</span>
               </button>
             );
           })}
@@ -133,7 +133,7 @@ export function KindSelectStep({
 
       {/* size (units_x × units_y) */}
       <fieldset className="mb-4">
-        <legend className="mb-1.5 text-xs text-slate-400">
+        <legend className="mb-1.5 text-xs text-txt-secondary">
           尺寸 (units) · 1 unit ≈ {SYSTEM_UNIT_MM[system]} mm
         </legend>
         <div className="grid grid-cols-2 gap-3">
@@ -156,16 +156,16 @@ export function KindSelectStep({
             testid="units-y"
           />
         </div>
-        <p className="mt-2 text-[11px] text-slate-500">
+        <p className="mt-2 text-[11px] text-txt-tertiary">
           提示: 公制 X × Y = 总长 × 总宽 (mm)。2×2 = {(2 * SYSTEM_UNIT_MM[system]).toFixed(1)} mm 方块, 4 个 stud 在顶面。
         </p>
       </fieldset>
 
       <div className="mt-2 flex items-center justify-between">
-        <button type="button" className="btn-ghost text-sm" onClick={onBack} data-testid="step2-back">
+        <button type="button" className="btn-outline text-sm" onClick={onBack} data-testid="step2-back">
           ← 上一步
         </button>
-        <button type="button" className="btn-primary text-sm" onClick={onNext} data-testid="step2-next">
+        <button type="button" className="btn-primary rounded-full text-sm" onClick={onNext} data-testid="step2-next">
           下一步: 输入 5 个测量 →
         </button>
       </div>
@@ -185,14 +185,14 @@ interface NumberStepperProps {
 
 function NumberStepper({ label, value, min, max, onChange, onAdjust, testid }: NumberStepperProps) {
   return (
-    <div className="rounded-md border border-slate-700 bg-slate-900/50 p-3" data-testid={testid}>
-      <label className="mb-1.5 block text-xs text-slate-400">{label}</label>
+    <div className="rounded-md border border-border bg-card p-3" data-testid={testid}>
+      <label className="mb-1.5 block text-xs text-txt-secondary">{label}</label>
       <div className="flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => onAdjust(-1)}
           disabled={value <= min}
-          className="grid h-8 w-8 place-items-center rounded border border-slate-700 text-slate-300 hover:border-slate-500 disabled:opacity-40"
+          className="grid h-8 w-8 place-items-center rounded border border-border text-txt-secondary hover:border-accent disabled:opacity-40"
           aria-label="减小"
           data-testid={`${testid}-dec`}
         >
@@ -208,7 +208,7 @@ function NumberStepper({ label, value, min, max, onChange, onAdjust, testid }: N
             const v = Number(e.target.value);
             if (Number.isFinite(v)) onChange(Math.max(min, Math.min(max, Math.round(v))));
           }}
-          className="h-8 w-16 rounded border border-slate-700 bg-slate-950 text-center text-sm text-slate-100 focus:border-primary-500 focus:outline-none"
+          className="h-8 w-16 rounded border border-border bg-page text-center text-sm text-txt-primary focus:border-accent focus:outline-none"
           data-testid={`${testid}-input`}
           aria-label={label}
         />
@@ -216,7 +216,7 @@ function NumberStepper({ label, value, min, max, onChange, onAdjust, testid }: N
           type="button"
           onClick={() => onAdjust(1)}
           disabled={value >= max}
-          className="grid h-8 w-8 place-items-center rounded border border-slate-700 text-slate-300 hover:border-slate-500 disabled:opacity-40"
+          className="grid h-8 w-8 place-items-center rounded border border-border text-txt-secondary hover:border-accent disabled:opacity-40"
           aria-label="增大"
           data-testid={`${testid}-inc`}
         >

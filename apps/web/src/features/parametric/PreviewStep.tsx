@@ -131,13 +131,13 @@ export function PreviewStep({
   if (submitError) {
     return (
       <div className="card" data-testid="submit-error">
-        <h2 className="mb-1 text-sm font-medium text-rose-300">提交失败</h2>
-        <p className="mb-3 text-xs text-rose-400">{submitError}</p>
+        <h2 className="mb-1 text-sm font-medium text-err">提交失败</h2>
+        <p className="mb-3 text-xs text-txt-secondary">{submitError}</p>
         <div className="flex gap-2">
-          <button type="button" className="btn-primary text-sm" onClick={onRetry} data-testid="retry-btn">
+          <button type="button" className="btn-primary rounded-full text-sm" onClick={onRetry} data-testid="retry-btn">
             重试提交
           </button>
-          <button type="button" className="btn-ghost text-sm" onClick={onBack} data-testid="back-to-measurements">
+          <button type="button" className="btn-outline text-sm" onClick={onBack} data-testid="back-to-measurements">
             ← 回上一步
           </button>
         </div>
@@ -153,9 +153,9 @@ export function PreviewStep({
   return (
     <div className="card" data-testid="step-preview">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h2 className="text-sm font-medium text-slate-300">步骤 4/4 — 预览 GLB</h2>
+        <h2 className="text-sm font-medium text-txt-primary">步骤 4/4 — 预览 GLB</h2>
         <StatusBadge status={jobState.status} />
-        <span className="text-[11px] text-slate-500" data-testid="preview-summary">
+        <span className="text-[11px] text-txt-tertiary" data-testid="preview-summary">
           {system} · {kind} · {unitsX}×{unitsY}
         </span>
       </div>
@@ -174,9 +174,9 @@ export function PreviewStep({
                 className={clsx(
                   "rounded-md border px-2 py-1.5 text-center text-[11px] transition",
                   reached
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                    : "border-slate-700 bg-slate-900/50 text-slate-500",
-                  isCurrent ? "ring-1 ring-primary-400" : "",
+                    ? "border-accent-border bg-accent-bg text-ok"
+                    : "border-border bg-card text-txt-tertiary",
+                  isCurrent ? "ring-1 ring-accent" : "",
                 )}
                 data-testid={`stage-pill-${s.key}`}
                 data-active={isCurrent ? "true" : "false"}
@@ -191,26 +191,26 @@ export function PreviewStep({
 
       <ProgressBar value={jobState.progress} />
 
-      <p className="mt-2 text-[11px] text-slate-500" data-testid="stage-text">
+      <p className="mt-2 text-[11px] text-txt-tertiary" data-testid="stage-text">
         阶段: {jobState.stage ?? "—"} · {jobState.progress}%
       </p>
 
       {jobState.error ? (
-        <p className="mt-2 text-xs text-rose-400" data-testid="job-error">错误: {jobState.error}</p>
+        <p className="mt-2 text-xs text-err" data-testid="job-error">错误: {jobState.error}</p>
       ) : null}
 
       <div className="mt-4">
         {jobState.status === "completed" && jobState.resultAssetId ? (
-          <div className="aspect-square w-full overflow-hidden rounded-lg bg-slate-950 sm:aspect-video" data-testid="glb-viewer-wrap">
+          <div className="aspect-square w-full overflow-hidden rounded-lg bg-page sm:aspect-video" data-testid="glb-viewer-wrap">
             <Viewer assetId={jobState.resultAssetId} />
           </div>
         ) : jobState.status === "failed" ? (
-          <div className="rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-300" data-testid="job-failed">
+          <div className="rounded-md border border-err bg-err-bg p-3 text-sm text-err" data-testid="job-failed">
             生成失败, 可调整 5 个 caliper 数字后重试 (例如 1B 错位 0.1 mm 会让反算 stud_Ø 偏 0.05 mm)。
           </div>
         ) : (
-          <div className="rounded-md border border-slate-700 bg-slate-900/50 p-6 text-center text-sm text-slate-400" data-testid="generating">
-            正在用 BlockGenerator 拼装 {system} {kind} {unitsX}×{unitsY} · part_id <code className="text-slate-300">{partId.slice(0, 8)}</code>…
+          <div className="rounded-md border border-border bg-card p-6 text-center text-sm text-txt-secondary" data-testid="generating">
+            正在用 BlockGenerator 拼装 {system} {kind} {unitsX}×{unitsY} · part_id <code className="text-txt-primary">{partId.slice(0, 8)}</code>…
           </div>
         )}
       </div>
@@ -218,8 +218,8 @@ export function PreviewStep({
       {/* show derived spec when present */}
       {block.derived_spec_mm ? (
         <details className="mt-3" data-testid="derived-spec">
-          <summary className="cursor-pointer text-xs text-slate-400">推导 spec (server-side)</summary>
-          <pre className="mt-1 overflow-x-auto rounded bg-slate-950 p-2 text-[11px] text-slate-300">
+          <summary className="cursor-pointer text-xs text-txt-secondary">推导 spec (server-side)</summary>
+          <pre className="mt-1 overflow-x-auto rounded bg-page p-2 text-[11px] text-txt-primary">
             {JSON.stringify(block.derived_spec_mm, null, 2)}
           </pre>
         </details>
@@ -227,11 +227,11 @@ export function PreviewStep({
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost text-sm" onClick={onBack} data-testid="preview-back">
+          <button type="button" className="btn-outline text-sm" onClick={onBack} data-testid="preview-back">
             ← 改 5 个数字
           </button>
           {jobState.status === "completed" ? (
-            <Link to="/" className="btn-ghost text-sm" data-testid="back-to-jobs">
+            <Link to="/" className="btn-outline text-sm" data-testid="back-to-jobs">
               ← 任务列表
             </Link>
           ) : null}
@@ -285,9 +285,9 @@ function applyStreamEvent(
 
 function StatusCard({ title, body, testid }: { title: string; body: string; testid: string }) {
   return (
-    <div className="card text-sm text-slate-400" data-testid={testid}>
-      <p className="text-slate-200">{title}</p>
-      <p className="mt-1 text-xs text-slate-500">{body}</p>
+    <div className="card text-sm text-txt-secondary" data-testid={testid}>
+      <p className="text-txt-primary">{title}</p>
+      <p className="mt-1 text-xs text-txt-tertiary">{body}</p>
     </div>
   );
 }

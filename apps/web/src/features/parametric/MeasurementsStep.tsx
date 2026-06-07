@@ -53,8 +53,8 @@ export function MeasurementsStep({ system, kind, values, onChange, onBack, onNex
 
   return (
     <div className="card" data-testid="step-measurements">
-      <h2 className="mb-2 text-sm font-medium text-slate-300">步骤 3/4 — 输入 5 个 caliper 测量</h2>
-      <p className="mb-3 text-xs text-slate-500">
+      <h2 className="mb-2 text-sm font-medium text-txt-primary">步骤 3/4 — 输入 5 个 caliper 测量</h2>
+      <p className="mb-3 text-xs text-txt-tertiary">
         5 个数字都是 mm, 卡尺直接卡的位置 (见右图)。所有体系 ({system} · {kind}) 都用这 5 个, 推导在服务端做。
       </p>
 
@@ -67,21 +67,21 @@ export function MeasurementsStep({ system, kind, values, onChange, onBack, onNex
             return (
               <li
                 key={f.key}
-                className="flex items-start gap-3 rounded-md border border-slate-700 bg-slate-900/50 p-2.5"
+                className="flex items-start gap-3 rounded-md border border-border bg-card p-2.5"
                 data-testid={`measurement-${f.key}`}
                 data-valid={valid ? "true" : "false"}
               >
                 <span
                   aria-hidden
-                  className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary-500/20 text-[11px] font-bold text-primary-100 ring-1 ring-primary-500/40"
+                  className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-bg text-[11px] font-bold text-accent ring-1 ring-accent-border"
                 >
                   {f.code}
                 </span>
                 <div className="flex-1">
-                  <label htmlFor={`m-${f.key}`} className="block text-xs font-medium text-slate-200">
+                  <label htmlFor={`m-${f.key}`} className="block text-xs font-medium text-txt-primary">
                     {f.label}
                   </label>
-                  <p className="mt-0.5 text-[10px] leading-snug text-slate-500">{f.hint}</p>
+                  <p className="mt-0.5 text-[10px] leading-snug text-txt-tertiary">{f.hint}</p>
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <input
                       id={`m-${f.key}`}
@@ -93,14 +93,14 @@ export function MeasurementsStep({ system, kind, values, onChange, onBack, onNex
                       onChange={(e) => setField(f.key, e.target.value)}
                       placeholder="mm"
                       className={clsx(
-                        "h-8 w-28 rounded border bg-slate-950 px-2 text-sm text-slate-100 focus:outline-none",
+                        "h-8 w-28 rounded border bg-page px-2 text-sm text-txt-primary focus:outline-none",
                         valid
-                          ? "border-slate-700 focus:border-primary-500"
-                          : "border-rose-700/60 focus:border-rose-500",
+                          ? "border-border focus:border-accent"
+                          : "border-err focus:border-err",
                       )}
                       data-testid={`measurement-input-${f.key}`}
                     />
-                    <span className="text-xs text-slate-500">{f.unit}</span>
+                    <span className="text-xs text-txt-tertiary">{f.unit}</span>
                   </div>
                 </div>
               </li>
@@ -109,14 +109,14 @@ export function MeasurementsStep({ system, kind, values, onChange, onBack, onNex
         </ol>
 
         {/* SVG diagram */}
-        <div className="rounded-md border border-slate-700 bg-white p-2" data-testid="measurement-svg-wrap">
+        <div className="rounded-md border border-border bg-white p-2" data-testid="measurement-svg-wrap">
           <MeasurementDiagram />
         </div>
       </div>
 
       {crossCheckWarning ? (
         <p
-          className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300"
+          className="mt-3 rounded-md border border-warn bg-warn-bg px-3 py-1.5 text-xs text-warn"
           data-testid="cross-check-warning"
         >
           ⚠ {crossCheckWarning}
@@ -124,16 +124,16 @@ export function MeasurementsStep({ system, kind, values, onChange, onBack, onNex
       ) : null}
 
       <div className="mt-4 flex items-center justify-between">
-        <p className={clsx("text-xs", allValid ? "text-emerald-400" : "text-slate-500")} data-testid="measurements-validity">
+        <p className={clsx("text-xs", allValid ? "text-ok" : "text-txt-tertiary")} data-testid="measurements-validity">
           {allValid ? "✓ 5 个数字均已填, 可生成" : "请填满 5 个正数 (mm)"}
         </p>
         <div className="flex items-center gap-2">
-          <button type="button" className="btn-ghost text-sm" onClick={onBack} data-testid="step3-back">
+          <button type="button" className="btn-outline text-sm" onClick={onBack} data-testid="step3-back">
             ← 上一步
           </button>
           <button
             type="button"
-            className="btn-primary text-sm"
+            className="btn-primary rounded-full text-sm"
             onClick={onNext}
             disabled={!allValid}
             data-testid="step3-next"
@@ -145,7 +145,7 @@ export function MeasurementsStep({ system, kind, values, onChange, onBack, onNex
 
       {/* Public-system cheat sheet (purely a UX nicety; the real derivation
           is server-side). Hidden on small screens to keep the page short. */}
-      <p className="mt-3 hidden text-[10px] text-slate-500 lg:block" data-testid="public-spec-hint">
+      <p className="mt-3 hidden text-[10px] text-txt-tertiary lg:block" data-testid="public-spec-hint">
         公开规格参考 ({system}) · unit = {SYSTEM_UNIT_MM[system]} mm ·{" "}
         {system === "duplo"
           ? "brick 17.0 mm, knob Ø16.0 × 7.0"
