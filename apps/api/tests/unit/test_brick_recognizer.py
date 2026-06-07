@@ -83,3 +83,38 @@ def test_metric_pitch_too_few_points() -> None:
     intrinsics = {"fx": 1250.0, "fy": 1250.0, "cx": 320.0, "cy": 240.0, "width": 640, "height": 480}
     depth = np.full((10, 10), 250, dtype=np.uint16)
     assert metric_pitch(np.array([[1.0, 1.0]]), depth, intrinsics) is None
+
+
+def _draw_studs(width: int, height: int, centers: list[tuple[int, int]], radius: int) -> np.ndarray:
+    """Bright disks on a dark background → an (H, W, 3) uint8 RGB array."""
+    img = np.zeros((height, width, 3), dtype=np.uint8)
+    yy, xx = np.mgrid[0:height, 0:width]
+    for cx, cy in centers:
+        mask = (xx - cx) ** 2 + (yy - cy) ** 2 <= radius**2
+        img[mask] = 255
+    return img
+
+
+def test_detect_studs_finds_all_centres() -> None:
+    from services.brick_recognizer import detect_studs
+
+    centers = [(280, 120), (360, 120), (280, 200), (360, 200),
+               (280, 280), (360, 280), (280, 360), (360, 360)]  # 2 cols x 4 rows
+    img = _draw_studs(640, 480, centers, radius=12)
+    found = detect_studs(img)
+    assert found.shape[0] == 8, found.shape
+    # Each found centre should be near a drawn centre.
+    for cx, cy in centers:
+        d = np.min(np.hypot(found[:, 0] - cx, found[:, 1] - cy))
+        assert d < 2.0, (cx, cy, d)
+
+
+def test_fit_grid_counts_rows_and_cols() -> None:
+    from services.brick_recognizer import detect_studs, fit_grid
+
+    centers = [(280, 120), (360, 120), (280, 200), (360, 200),
+               (280, 280), (360, 280), (280, 360), (360, 360)]
+    img = _draw_studs(640, 480, centers, radius=12)
+    found = detect_studs(img)
+    units_x, units_y = fit_grid(found)
+    assert (units_x, units_y) == (2, 4)

@@ -144,12 +144,77 @@ def metric_pitch(
     return _median_nn_distance(np.array(pts3d, dtype=np.float64))
 
 
+def detect_studs(
+    rgb: np.ndarray,
+    *,
+    min_area_px: int = 20,
+    max_area_frac: float = 0.25,
+) -> np.ndarray:
+    """Detect stud centres on a top-down frame → (N, 2) array of (x, y).
+
+    Deterministic blob detector: greyscale → threshold at
+    ``mean + 0.5*std`` → connected components → centroids of components
+    whose area is in ``[min_area_px, max_area_frac * total]``. Tuned for
+    clean, high-contrast top-down frames; see the module docstring.
+    """
+    arr = np.asarray(rgb)
+    gray = arr[..., :3].mean(axis=2) if arr.ndim == 3 else arr.astype(np.float64)
+    thresh = float(gray.mean() + 0.5 * gray.std())
+    mask = gray > thresh
+    labels, n = ndimage.label(mask)
+    if n == 0:
+        return np.empty((0, 2), dtype=np.float64)
+    total = gray.size
+    centers: list[list[float]] = []
+    for lbl in range(1, n + 1):
+        ys, xs = np.where(labels == lbl)
+        area = xs.size
+        if area < min_area_px or area > max_area_frac * total:
+            continue
+        centers.append([float(xs.mean()), float(ys.mean())])
+    if not centers:
+        return np.empty((0, 2), dtype=np.float64)
+    return np.array(centers, dtype=np.float64)
+
+
+def _count_clusters(values: np.ndarray, min_gap: float) -> int:
+    """Count 1-D clusters: sort, then split wherever the gap > ``min_gap``."""
+    s = np.sort(np.asarray(values, dtype=np.float64))
+    if s.size == 0:
+        return 0
+    clusters = 1
+    for i in range(1, s.size):
+        if s[i] - s[i - 1] > min_gap:
+            clusters += 1
+    return clusters
+
+
+def fit_grid(centers_px: np.ndarray, *, px_pitch: float | None = None) -> tuple[int, int]:
+    """Infer the stud grid (units_x, units_y) from stud centres.
+
+    Clusters x-coordinates into columns and y-coordinates into rows,
+    splitting where the gap exceeds half the (estimated) pixel pitch.
+    Assumes a roughly axis-aligned top-down frame.
+    """
+    centers = np.asarray(centers_px, dtype=np.float64)
+    if centers.shape[0] == 0:
+        return 0, 0
+    if px_pitch is None:
+        px_pitch = _median_nn_distance(centers) or 1.0
+    gap = px_pitch * 0.5
+    units_x = _count_clusters(centers[:, 0], gap)
+    units_y = _count_clusters(centers[:, 1], gap)
+    return units_x, units_y
+
+
 __all__ = [
     "DEFAULT_MIN_CONFIDENCE",
     "DEFAULT_PITCH_TOLERANCE_MM",
     "SYSTEM_UNIT_MM",
     "classify_system",
+    "detect_studs",
     "encode_depth16_png",
+    "fit_grid",
     "load_depth16_png",
     "metric_pitch",
 ]
