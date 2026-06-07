@@ -436,6 +436,7 @@ function UploadStage({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleFiles(files: FileList | null | undefined) {
+    if (uploading) return;
     if (!files || files.length === 0 || !partId) return;
     setUploading(true);
     setError(null);
