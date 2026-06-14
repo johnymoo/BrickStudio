@@ -55,11 +55,17 @@ class CaptureNotFound(AppError):
     http_status = 404
 
 
+class PartNotFound(AppError):
+    code = "PART_NOT_FOUND"
+    http_status = 404
+
+
 __all__ = [
     "AppError",
     "AssetNotFound",
     "CaptureInvalid",
     "CaptureNotFound",
     "JobNotFound",
+    "PartNotFound",
     "ReconstructFailed",
 ]

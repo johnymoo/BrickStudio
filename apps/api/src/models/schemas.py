@@ -273,6 +273,44 @@ class AssetRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Library part (issue #5)
+# ---------------------------------------------------------------------------
+class LibraryPartRead(BaseModel):
+    """Response shape for ``/library`` list + detail."""
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    part_id: UUID = Field(validation_alias="id")
+    capture_id: UUID
+    #: GLB asset id — the web fetches the presigned URL via GET /assets/{id}.
+    asset_id: UUID | None = None
+    #: photo / parametric_block / ar_recognized (snapshot of capture.mode).
+    source_mode: str
+    system: str | None = None
+    kind: str | None = None
+    units_x: int | None = None
+    units_y: int | None = None
+    derived_spec_mm: dict[str, Any] | None = None
+    color: str | None = None
+    name: str
+    notes: str | None = None
+    #: pending / verified / rejected.
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class LibraryPartUpdate(BaseModel):
+    """Request body for ``PATCH /library/{id}`` — partial update."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    notes: str | None = None
+    status: Literal["pending", "verified", "rejected"] | None = None
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 class HealthRead(BaseModel):
@@ -314,6 +352,8 @@ __all__ = [
     "ErrorEnvelope",
     "HealthRead",
     "JobRead",
+    "LibraryPartRead",
+    "LibraryPartUpdate",
     "NeedsMeasurement",
     "ParametricBlockRead",
     "ParametricBlockRequest",

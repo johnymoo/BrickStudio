@@ -5,6 +5,7 @@ from core.errors import (
     CaptureInvalid,
     CaptureNotFound,
     JobNotFound,
+    PartNotFound,
     ReconstructFailed,
 )
 
@@ -14,5 +15,6 @@ __all__ = [
     "CaptureInvalid",
     "CaptureNotFound",
     "JobNotFound",
+    "PartNotFound",
     "ReconstructFailed",
 ]
