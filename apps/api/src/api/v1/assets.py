@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.config import settings
@@ -28,7 +28,11 @@ router = APIRouter(prefix="/assets", tags=["assets"])
         302: {"description": "Redirect to the presigned URL"},
     },
 )
-async def get_asset(asset_id: uuid.UUID, session: DBSessionDep) -> RedirectResponse | JSONResponse:
+async def get_asset(
+    asset_id: uuid.UUID,
+    request: Request,
+    session: DBSessionDep,
+) -> RedirectResponse | JSONResponse:
     asset = await session.get(Asset, asset_id)
     if asset is None:
         raise AssetNotFound(f"asset {asset_id} not found")
@@ -47,7 +51,14 @@ async def get_asset(asset_id: uuid.UUID, session: DBSessionDep) -> RedirectRespo
     # The brief says "302 跳到 presigned URL". We also return a small JSON body
     # so curl / SDK clients that don't follow redirects still get something
     # useful. Most browsers will follow the 302 and never see the body.
+    if _prefers_json(request.headers.get("accept")):
+        return JSONResponse(content=body.model_dump(mode="json"))
+
     resp = JSONResponse(content=body.model_dump(mode="json"))
     resp.headers["Location"] = url
     resp.status_code = 302
     return resp
+
+
+def _prefers_json(accept: str | None) -> bool:
+    return any(part.split(";", 1)[0].strip().lower() == "application/json" for part in (accept or "").split(","))
