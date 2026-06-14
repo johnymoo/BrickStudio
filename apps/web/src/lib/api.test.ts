@@ -10,6 +10,9 @@ import {
   ApiClientError,
   listCaptures,
   getCaptureImages,
+  listLibraryParts,
+  getLibraryPart,
+  updateLibraryPart,
 } from "@lib/api";
 
 // Node 24's undici fetch mishandles FormData bodies (sends them as
@@ -158,6 +161,87 @@ const server = setupServer(
       expires_at: "<PRIVATE_DATE>",
     });
   }),
+
+  http.get("*/api/v1/library", ({ request }) => {
+    const url = new URL(request.url);
+    const status = url.searchParams.get("status");
+    const all = [
+      {
+        part_id: "p1",
+        capture_id: "c1",
+        asset_id: "a1",
+        source_mode: "parametric_block",
+        system: "feile",
+        kind: "brick",
+        units_x: 2,
+        units_y: 2,
+        derived_spec_mm: null,
+        color: null,
+        name: "alpha",
+        notes: null,
+        status: "pending",
+        created_at: "<PRIVATE_DATE>",
+        updated_at: "<PRIVATE_DATE>",
+      },
+      {
+        part_id: "p2",
+        capture_id: "c2",
+        asset_id: "a2",
+        source_mode: "ar_recognized",
+        system: "feile",
+        kind: "plate",
+        units_x: 1,
+        units_y: 4,
+        derived_spec_mm: null,
+        color: null,
+        name: "beta",
+        notes: null,
+        status: "verified",
+        created_at: "<PRIVATE_DATE>",
+        updated_at: "<PRIVATE_DATE>",
+      },
+    ];
+    return HttpResponse.json(status ? all.filter((p) => p.status === status) : all);
+  }),
+  http.get("*/api/v1/library/p1", () =>
+    HttpResponse.json({
+      part_id: "p1",
+      capture_id: "c1",
+      asset_id: "a1",
+      source_mode: "parametric_block",
+      system: "feile",
+      kind: "brick",
+      units_x: 2,
+      units_y: 2,
+      derived_spec_mm: null,
+      color: null,
+      name: "alpha",
+      notes: null,
+      status: "pending",
+      created_at: "<PRIVATE_DATE>",
+      updated_at: "<PRIVATE_DATE>",
+    }),
+  ),
+  http.patch("*/api/v1/library/p1", async ({ request }) => {
+    const body = (await request.json()) as Record<string, unknown>;
+    return HttpResponse.json({
+      part_id: "p1",
+      capture_id: "c1",
+      asset_id: "a1",
+      source_mode: "parametric_block",
+      system: "feile",
+      kind: "brick",
+      units_x: 2,
+      units_y: 2,
+      derived_spec_mm: null,
+      color: null,
+      name: (body.name as string) ?? "alpha",
+      notes: (body.notes as string) ?? null,
+      status: (body.status as string) ?? "pending",
+      created_at: "<PRIVATE_DATE>",
+      updated_at: "<PRIVATE_DATE>",
+    });
+  }),
 );
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -259,6 +343,31 @@ describe("getAssetUrl", () => {
     const info = await getAssetUrl("asset-123");
     expect(info.url).toContain("asset-123.glb");
     expect(info.kind).toBe("mesh_gltf");
+  });
+});
+
+describe("library api", () => {
+  it("lists parts", async () => {
+    const parts = await listLibraryParts();
+    expect(parts).toHaveLength(2);
+    expect(parts[0].name).toBe("alpha");
+  });
+
+  it("filters parts by status", async () => {
+    const parts = await listLibraryParts("verified");
+    expect(parts).toHaveLength(1);
+    expect(parts[0].name).toBe("beta");
+  });
+
+  it("gets a part by id", async () => {
+    const part = await getLibraryPart("p1");
+    expect(part.system).toBe("feile");
+  });
+
+  it("updates a part", async () => {
+    const part = await updateLibraryPart("p1", { name: "renamed", status: "verified" });
+    expect(part.name).toBe("renamed");
+    expect(part.status).toBe("verified");
   });
 });
 

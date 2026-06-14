@@ -75,6 +75,26 @@ export interface AssetInfo {
   expires_at: string;
 }
 
+export type PartStatus = "pending" | "verified" | "rejected";
+
+export interface LibraryPart {
+  part_id: string;
+  capture_id: string;
+  asset_id: string | null;
+  source_mode: string;
+  system: string | null;
+  kind: string | null;
+  units_x: number | null;
+  units_y: number | null;
+  derived_spec_mm: Record<string, unknown> | null;
+  color: string | null;
+  name: string;
+  notes: string | null;
+  status: PartStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ApiError {
   code: string;
   message: string;
@@ -210,6 +230,32 @@ export async function getJob(id: string, signal?: AbortSignal): Promise<JobInfo>
 
 export async function getAssetUrl(id: string, signal?: AbortSignal): Promise<AssetInfo> {
   return request<AssetInfo>(`/assets/${encodeURIComponent(id)}`, { method: "GET" }, signal);
+}
+
+export async function listLibraryParts(
+  status?: PartStatus,
+  limit = 20,
+  signal?: AbortSignal,
+): Promise<LibraryPart[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (status) params.set("status", status);
+  return request<LibraryPart[]>(`/library?${params.toString()}`, { method: "GET" }, signal);
+}
+
+export async function getLibraryPart(id: string, signal?: AbortSignal): Promise<LibraryPart> {
+  return request<LibraryPart>(`/library/${encodeURIComponent(id)}`, { method: "GET" }, signal);
+}
+
+export async function updateLibraryPart(
+  id: string,
+  patch: { name?: string; notes?: string | null; status?: PartStatus },
+  signal?: AbortSignal,
+): Promise<LibraryPart> {
+  return request<LibraryPart>(
+    `/library/${encodeURIComponent(id)}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) },
+    signal,
+  );
 }
 
 /** Reconstruction stage enum (mirrors `docs/design-phase2.md` §3.2). */
