@@ -35,9 +35,13 @@ async function mockLibraryApi(page: Page) {
 
   await page.route("**/api/v1/library**", async (route, request) => {
     const url = new URL(request.url());
+    const isDetailPath = url.pathname.endsWith(`/library/${PART_ID}`);
+    const isListPath = url.pathname.endsWith("/library");
 
-    if (request.method() === "PATCH") {
-      current = { ...current, ...request.postDataJSON(), updated_at: "2026-06-14T10:00:01.000Z" };
+    if (isDetailPath && request.method() === "PATCH") {
+      const patch = request.postDataJSON();
+      expect(patch).toEqual({ status: "verified" });
+      current = { ...current, ...patch, updated_at: "2026-06-14T10:00:01.000Z" };
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -46,7 +50,7 @@ async function mockLibraryApi(page: Page) {
       return;
     }
 
-    if (url.pathname.endsWith(`/library/${PART_ID}`)) {
+    if (isDetailPath && request.method() === "GET") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -55,7 +59,7 @@ async function mockLibraryApi(page: Page) {
       return;
     }
 
-    if (url.pathname.endsWith("/library")) {
+    if (isListPath && request.method() === "GET") {
       const status = url.searchParams.get("status");
       await route.fulfill({
         status: 200,
@@ -65,7 +69,16 @@ async function mockLibraryApi(page: Page) {
       return;
     }
 
-    await route.continue();
+    await route.fulfill({
+      status: isListPath || isDetailPath ? 405 : 404,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: {
+          code: isListPath || isDetailPath ? "METHOD_NOT_ALLOWED" : "NOT_FOUND",
+          message: `Unexpected library request: ${request.method()} ${url.pathname}`,
+        },
+      }),
+    });
   });
 
   await page.route(`**/api/v1/assets/${PART.asset_id}`, async (route) => {
