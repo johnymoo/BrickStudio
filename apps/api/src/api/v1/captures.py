@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, File, Form, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.config import settings
 from app.deps import DBSessionDep
@@ -166,7 +166,11 @@ async def get_capture(capture_id: uuid.UUID, session: DBSessionDep) -> CaptureRe
     capture = await session.get(Capture, capture_id)
     if capture is None:
         raise CaptureNotFound(f"capture {capture_id} not found")
-    job_id = await session.scalar(select(Job.id).where(Job.capture_id == capture_id).order_by(Job.created_at.desc()))
+    job_id = await session.scalar(
+        select(Job.id)
+        .where(Job.capture_id == capture_id)
+        .order_by(Job.created_at.desc(), Job.id.desc())
+    )
     return _capture_read(capture, job_id)
 
 
@@ -190,17 +194,26 @@ async def get_capture_images(capture_id: uuid.UUID, session: DBSessionDep) -> Ca
 async def _latest_job_ids(session: DBSessionDep, capture_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
     if not capture_ids:
         return {}
+    ranked_jobs = (
+        select(
+            Job.capture_id,
+            Job.id,
+            func.row_number()
+            .over(
+                partition_by=Job.capture_id,
+                order_by=(Job.created_at.desc(), Job.id.desc()),
+            )
+            .label("job_rank"),
+        )
+        .where(Job.capture_id.in_(capture_ids))
+        .subquery()
+    )
     rows = (
         await session.execute(
-            select(Job.capture_id, Job.id)
-            .where(Job.capture_id.in_(capture_ids))
-            .order_by(Job.capture_id, Job.created_at.desc())
+            select(ranked_jobs.c.capture_id, ranked_jobs.c.id).where(ranked_jobs.c.job_rank == 1)
         )
     ).all()
-    job_ids: dict[uuid.UUID, uuid.UUID] = {}
-    for capture_id, job_id in rows:
-        job_ids.setdefault(capture_id, job_id)
-    return job_ids
+    return {capture_id: job_id for capture_id, job_id in rows}
 
 
 def _capture_read(capture: Capture, job_id: uuid.UUID | None) -> CaptureRead:
@@ -233,6 +246,8 @@ def _capture_status(capture: Capture, job_id: uuid.UUID | None) -> str:
 def _needs_measurement(capture: Capture, job_id: uuid.UUID | None) -> NeedsMeasurement | None:
     recognition = capture.recognition_result or {}
     if capture.mode != "ar_recognized" or job_id is not None:
+        return None
+    if recognition.get("ok") is True and not recognition.get("reason"):
         return None
     return NeedsMeasurement(
         fields=_MEASUREMENT_FIELDS,

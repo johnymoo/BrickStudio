@@ -5,7 +5,8 @@ import io
 import struct
 import zlib
 from collections.abc import AsyncIterator
-from uuid import uuid4
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -142,6 +143,103 @@ async def test_list_captures_returns_recent_ar_capture_that_needs_measurement(ap
     assert item["recognition_result"]["reason"] == "system_hint_unknown"
     assert item["needs_measurement"]["reason"] == "system_hint_unknown"
     assert item["needs_measurement"]["endpoint"] == "/api/v1/parametric-blocks"
+
+
+async def test_list_captures_uses_deterministic_latest_job_and_precise_needs_measurement(
+    app_client: AsyncIterator,
+) -> None:
+    from db.models import Capture, Job
+    from db.session import async_session_factory
+
+    capture_id = uuid4()
+    older_job_id = UUID("00000000-0000-0000-0000-000000000001")
+    latest_job_id = UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")
+    tied_created_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    fallback_id = uuid4()
+    recognized_id = uuid4()
+
+    factory = async_session_factory()
+    async with factory() as session:
+        session.add_all(
+            [
+                Capture(
+                    id=capture_id,
+                    part_id="photo-retry-test",
+                    status="pending",
+                    image_count=4,
+                    image_keys=[f"raw/{capture_id}/{idx:03d}.png" for idx in range(4)],
+                    capture_mode="phone_walkaround",
+                    mode="photo",
+                ),
+                Capture(
+                    id=fallback_id,
+                    part_id="ar-fallback-test",
+                    status="pending",
+                    image_count=2,
+                    image_keys=[f"raw/{fallback_id}/recognition_rgb.png"],
+                    capture_mode="phone_walkaround",
+                    mode="ar_recognized",
+                    recognition_result={
+                        "ok": False,
+                        "reason": "system_hint_unknown",
+                    },
+                ),
+                Capture(
+                    id=recognized_id,
+                    part_id="ar-recognized-test",
+                    status="pending",
+                    image_count=2,
+                    image_keys=[f"raw/{recognized_id}/recognition_rgb.png"],
+                    capture_mode="phone_walkaround",
+                    mode="ar_recognized",
+                    recognition_result={
+                        "ok": True,
+                        "reason": None,
+                    },
+                ),
+                Job(
+                    id=older_job_id,
+                    capture_id=capture_id,
+                    kind="reconstruct",
+                    status="failed",
+                    progress=100,
+                    stage="failed",
+                    created_at=tied_created_at,
+                ),
+                Job(
+                    id=latest_job_id,
+                    capture_id=capture_id,
+                    kind="reconstruct",
+                    status="pending",
+                    progress=0,
+                    stage="queued",
+                    created_at=tied_created_at,
+                ),
+            ]
+        )
+        await session.commit()
+
+    resp = await app_client.get("/api/v1/captures?limit=10")
+    assert resp.status_code == 200, resp.text
+    captures_by_id = {item["capture_id"]: item for item in resp.json()}
+
+    photo_capture = captures_by_id[str(capture_id)]
+    assert photo_capture["job_id"] == str(latest_job_id)
+    assert photo_capture["status"] == "pending"
+
+    fallback_capture = captures_by_id[str(fallback_id)]
+    assert fallback_capture["job_id"] is None
+    assert fallback_capture["status"] == "needs_measurement"
+    assert fallback_capture["needs_measurement"]["reason"] == "system_hint_unknown"
+
+    recognized_capture = captures_by_id[str(recognized_id)]
+    assert recognized_capture["job_id"] is None
+    assert recognized_capture["status"] == "pending"
+    assert recognized_capture["needs_measurement"] is None
+
+    detail = await app_client.get(f"/api/v1/captures/{capture_id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["job_id"] == str(latest_job_id)
 
 
 async def test_capture_images_returns_presigned_urls_for_that_capture_only(
