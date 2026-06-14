@@ -14,6 +14,7 @@ import { subscribeJob, type JobStreamEvent } from "@lib/api";
 import { Viewer } from "@features/viewer/Viewer";
 import { ProgressBar } from "@components/ProgressBar";
 import { StatusBadge } from "@components/StatusBadge";
+import { useJobStore, type JobRecord } from "@stores/useJobStore";
 import type { BrickSystem, BrickKind, ParametricBlockResponse } from "./api";
 
 interface PreviewStepProps {
@@ -87,6 +88,7 @@ export function PreviewStep({
 }: PreviewStepProps) {
   const [jobState, setJobState] = useState<JobState>(INITIAL_JOB_STATE);
   const abortRef = useRef<AbortController | null>(null);
+  const updateJob = useJobStore((s) => s.updateJob);
 
   // Initial seed from the POST response (so we don't need to wait for the
   // SSE open event to show the first progress bar value). The backend's
@@ -113,7 +115,11 @@ export function PreviewStep({
     abortRef.current = ctrl;
     const dispose = subscribeJob(jobId, {
       signal: ctrl.signal,
-      onEvent: (ev: JobStreamEvent) => applyStreamEvent(ev, setJobState),
+      onEvent: (ev: JobStreamEvent) => {
+        applyStreamEvent(ev, setJobState);
+        const patch = patchJobFromStreamEvent(ev);
+        if (patch) updateJob(jobId, patch);
+      },
     });
     return () => {
       ctrl.abort();
@@ -122,7 +128,7 @@ export function PreviewStep({
     // We intentionally re-subscribe when jobId changes only — internal
     // jobState changes shouldn't re-spawn the EventSource.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [block?.job_id]);
+  }, [block?.job_id, updateJob]);
 
   // ---- error / loading shells ----------------------------------------------
   if (submitting && !block) {
@@ -280,6 +286,35 @@ function applyStreamEvent(
     case "open":
     default:
       return;
+  }
+}
+
+function patchJobFromStreamEvent(ev: JobStreamEvent): Partial<JobRecord> | null {
+  switch (ev.type) {
+    case "progress": {
+      const patch: Partial<JobRecord> = { progress: ev.progress };
+      if (ev.stage !== undefined) patch.stage = ev.stage;
+      if (ev.eta_seconds !== undefined) patch.etaSeconds = ev.eta_seconds;
+      return patch;
+    }
+    case "stage_change": {
+      const patch: Partial<JobRecord> = { stage: ev.stage };
+      if (ev.eta_seconds !== undefined) patch.etaSeconds = ev.eta_seconds;
+      return patch;
+    }
+    case "completed":
+      return {
+        status: "completed",
+        progress: 100,
+        stage: "completed",
+        resultAssetId: ev.result_asset_id ?? null,
+      };
+    case "failed":
+      return { status: "failed", stage: "failed", error: ev.error };
+    case "error":
+    case "open":
+    default:
+      return null;
   }
 }
 

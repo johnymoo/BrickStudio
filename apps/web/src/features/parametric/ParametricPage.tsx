@@ -30,6 +30,7 @@ import { KindSelectStep } from "./KindSelectStep";
 import { MeasurementsStep } from "./MeasurementsStep";
 import { PreviewStep } from "./PreviewStep";
 import { newPartId } from "@lib/api";
+import { useJobStore } from "@stores/useJobStore";
 
 const STEP_LABELS: Record<WizardStep, string> = {
   1: "照片",
@@ -47,6 +48,7 @@ export function ParametricPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [block, setBlock] = useState<ParametricBlockResponse | null>(null);
+  const addJob = useJobStore((s) => s.addJob);
 
   // ---- step navigation ----------------------------------------------------
   const goTo = useCallback((s: WizardStep) => {
@@ -91,6 +93,25 @@ export function ParametricPage() {
         raw_measurements_mm: form.measurements,
         photos: form.photos.length > 0 ? form.photos : undefined,
       });
+      if (res.job_id) {
+        const updatedAt = new Date().toISOString();
+        addJob({
+          id: res.job_id,
+          captureId: res.capture_id,
+          partId: res.part_id,
+          status: res.status,
+          progress: res.status === "completed" ? 100 : 0,
+          stage: res.status === "completed" ? "completed" : "parametric_generate",
+          error: null,
+          resultAssetId: null,
+          createdAt: res.created_at,
+          updatedAt,
+          imageCount: form.photos.length,
+          captureMode: "parametric_block",
+          etaSeconds: null,
+          pipelineUsed: "parametric_block",
+        });
+      }
       setBlock(res);
       setForm((f) => ({ ...f, jobId: res.job_id, captureId: res.capture_id }));
       setStep(4);
@@ -109,7 +130,7 @@ export function ParametricPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [form]);
+  }, [addJob, form]);
 
   const reset = useCallback(() => {
     setForm({ ...DEFAULT_FORM_STATE, partId: newPartId() });

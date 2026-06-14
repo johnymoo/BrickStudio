@@ -25,8 +25,11 @@ vi.mock("@features/parametric/api", async () => {
 });
 
 import { createParametricBlock } from "@features/parametric/api";
+import { subscribeJob, type JobStreamEvent } from "@lib/api";
 import { AppHeader } from "@components/AppHeader";
+import { useJobStore } from "@stores/useJobStore";
 const createParametricBlockMock = vi.mocked(createParametricBlock);
+const subscribeJobMock = vi.mocked(subscribeJob);
 
 function renderPage() {
   return render(
@@ -43,6 +46,10 @@ function makeJpegFile(name: string): File {
 describe("ParametricPage", () => {
   beforeEach(() => {
     createParametricBlockMock.mockReset();
+    subscribeJobMock.mockReset();
+    subscribeJobMock.mockReturnValue(() => undefined);
+    useJobStore.setState({ jobs: {}, currentJobId: null });
+    localStorage.clear();
     // Provide a SSE mock so PreviewStep doesn't crash on first mount.
     installEventSourceMock();
   });
@@ -52,6 +59,48 @@ describe("ParametricPage", () => {
     vi.restoreAllMocks();
     delete (globalThis as { EventSource?: unknown }).EventSource;
   });
+
+  async function submitCompleteParametricBlock() {
+    renderPage();
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId("photo-input"), {
+        target: { files: [makeJpegFile("a.jpg"), makeJpegFile("b.jpg")] },
+      });
+    });
+    await waitFor(() => expect(screen.getByTestId("photo-grid")).toHaveAttribute("data-count", "2"));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("step1-next"));
+    });
+
+    await waitFor(() => expect(screen.getByTestId("step-kind")).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("system-lego"));
+      fireEvent.click(screen.getByTestId("kind-tile"));
+      fireEvent.click(screen.getByTestId("units-x-inc"));
+      fireEvent.click(screen.getByTestId("units-x-inc"));
+      fireEvent.click(screen.getByTestId("step2-next"));
+    });
+
+    await waitFor(() => expect(screen.getByTestId("step-measurements")).toBeInTheDocument());
+    for (const [k, v] of Object.entries({
+      outer_pitch_mm: 16.0,
+      inner_pitch_mm: 7.2,
+      stud_diameter_mm: 4.4,
+      brick_height_net_mm: 9.5,
+      brick_height_total_mm: 11.2,
+    })) {
+      await act(async () => {
+        fireEvent.change(screen.getByTestId(`measurement-input-${k}`), { target: { value: String(v) } });
+      });
+    }
+    await waitFor(() => expect(screen.getByTestId("step3-next")).not.toBeDisabled());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("step3-next"));
+    });
+
+    await waitFor(() => expect(screen.getByTestId("step-preview")).toBeInTheDocument());
+  }
 
   it("starts on step 1 (photos) with the stepper visible", () => {
     renderPage();
@@ -168,6 +217,95 @@ describe("ParametricPage", () => {
       ["brick_height_net_mm", "brick_height_total_mm", "inner_pitch_mm", "outer_pitch_mm", "stud_diameter_mm"].sort(),
     );
     expect(arg.photos).toBeUndefined(); // no photos in this test
+  });
+
+  it("persists a parametric job in the local job store after successful submit", async () => {
+    createParametricBlockMock.mockResolvedValue({
+      capture_id: "cap-1",
+      job_id: "job-1",
+      part_id: "p-1",
+      status: "pending",
+      mode: "parametric_block",
+      system: "lego",
+      kind: "tile",
+      units_x: 3,
+      units_y: 2,
+      raw_measurements_mm: {
+        outer_pitch_mm: 16,
+        inner_pitch_mm: 7.2,
+        stud_diameter_mm: 4.4,
+        brick_height_net_mm: 9.5,
+        brick_height_total_mm: 11.2,
+      },
+      derived_spec_mm: { unit_mm: 8, height_mm: 9.5, knob_diameter_mm: 4.4, knob_height_mm: 1.7 },
+      cross_check_warnings: [],
+      created_at: "2026-06-06T10:00:00Z",
+    });
+
+    await submitCompleteParametricBlock();
+
+    const job = useJobStore.getState().jobs["job-1"];
+    expect(job).toMatchObject({
+      id: "job-1",
+      captureId: "cap-1",
+      partId: "p-1",
+      status: "pending",
+      progress: 0,
+      stage: "parametric_generate",
+      resultAssetId: null,
+      createdAt: "2026-06-06T10:00:00Z",
+      imageCount: 2,
+      captureMode: "parametric_block",
+      pipelineUsed: "parametric_block",
+    });
+    expect(job?.updatedAt).toEqual(expect.any(String));
+    expect(useJobStore.getState().currentJobId).toBe("job-1");
+  });
+
+  it("updates the persisted parametric job when the preview SSE completes", async () => {
+    let streamHandler: ((event: JobStreamEvent) => void) | null = null;
+    subscribeJobMock.mockImplementation((_jobId, opts) => {
+      streamHandler = opts.onEvent;
+      return () => undefined;
+    });
+    createParametricBlockMock.mockResolvedValue({
+      capture_id: "cap-1",
+      job_id: "job-1",
+      part_id: "p-1",
+      status: "pending",
+      mode: "parametric_block",
+      system: "lego",
+      kind: "tile",
+      units_x: 3,
+      units_y: 2,
+      raw_measurements_mm: {
+        outer_pitch_mm: 16,
+        inner_pitch_mm: 7.2,
+        stud_diameter_mm: 4.4,
+        brick_height_net_mm: 9.5,
+        brick_height_total_mm: 11.2,
+      },
+      derived_spec_mm: null,
+      cross_check_warnings: [],
+      created_at: "2026-06-06T10:00:00Z",
+    });
+
+    await submitCompleteParametricBlock();
+    expect(subscribeJobMock).toHaveBeenCalledWith("job-1", expect.objectContaining({ onEvent: expect.any(Function) }));
+
+    await act(async () => {
+      streamHandler?.({ type: "progress", progress: 65, stage: "parametric_generate" });
+      streamHandler?.({ type: "completed", result_asset_id: "asset-1" });
+    });
+
+    await waitFor(() =>
+      expect(useJobStore.getState().jobs["job-1"]).toMatchObject({
+        status: "completed",
+        progress: 100,
+        stage: "completed",
+        resultAssetId: "asset-1",
+      }),
+    );
   });
 
   it("lets the user add and remove optional photos on step 1", async () => {

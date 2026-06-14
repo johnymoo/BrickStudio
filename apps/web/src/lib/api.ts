@@ -122,19 +122,21 @@ async function parseResponse<T>(res: Response): Promise<T> {
  * and tells the backend which reconstruction pipeline is most appropriate.
  * Mirrors `docs/design-phase2.md` §4.1.
  */
-export type CaptureMode = "phone_walkaround" | "studio_turntable" | "quick_snapshot";
+export type CaptureMode = "phone_walkaround" | "studio_turntable" | "quick_snapshot" | "parametric_block";
 
 /** Recommended number of photos for each capture mode (frontend guidance). */
 export const CAPTURE_MODE_GUIDANCE: Record<CaptureMode, number> = {
   phone_walkaround: 8,
   studio_turntable: 12,
   quick_snapshot: 4,
+  parametric_block: 0,
 };
 
 export const CAPTURE_MODE_LABELS: Record<CaptureMode, string> = {
   phone_walkaround: "📱 围绕物体走",
   studio_turntable: "🔄 转盘",
   quick_snapshot: "📸 快速拍",
+  parametric_block: "参数化建模",
 };
 
 /**
