@@ -132,15 +132,25 @@ def test_presigned_get_uses_injected_client_when_public_endpoint_differs(monkeyp
     assert injected.calls[0][:2] == ("models", "mesh.glb")
 
 
-def test_public_endpoint_with_path_fails_clearly(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "public_endpoint",
+    [
+        "http://192.168.88.75:9000/minio",
+        "http://192.168.88.75:9000?proxy=minio",
+        "http://192.168.88.75:9000#minio",
+    ],
+)
+def test_public_endpoint_with_path_query_or_fragment_fails_clearly(
+    monkeypatch, public_endpoint: str
+) -> None:
     monkeypatch.setattr(minio_client, "Minio", FakeMinio)
     monkeypatch.setattr(
         minio_client,
         "settings",
         SimpleNamespace(
             s3_endpoint="http://minio:9000",
-            s3_public_endpoint="http://192.168.88.75:9000/minio",
-            s3_public_base="http://192.168.88.75:9000/minio",
+            s3_public_endpoint=public_endpoint,
+            s3_public_base=public_endpoint,
             s3_access_key="blocktool",
             s3_secret_key="blocktool",
             s3_secure=False,
@@ -148,5 +158,5 @@ def test_public_endpoint_with_path_fails_clearly(monkeypatch) -> None:
         ),
     )
 
-    with pytest.raises(ValueError, match="must not include a path"):
+    with pytest.raises(ValueError, match="must not include a path, query, or fragment"):
         StorageClient()

@@ -3,8 +3,9 @@
 #
 # Routes:
 #   /api/*        -> api:8000      (FastAPI)
-#   /minio/*      -> minio:9000    (S3 API, used for direct browser fetches
-#                                  when the API does not pre-sign a URL)
+#   /minio/*      -> minio:9000    (path-proxied S3 API route for legacy/direct
+#                                  browser fetches; do not use this path as
+#                                  S3_PUBLIC_ENDPOINT for presigned URLs)
 #   /healthz      -> web:80        (nginx healthcheck inside the web image)
 #   /*            -> web:80        (PWA static bundle)
 #
@@ -41,8 +42,8 @@
 		reverse_proxy api:8000
 	}
 
-	# MinIO API (for the front-end to fetch pre-signed URLs without
-	# CORS gymnastics).
+	# MinIO API path proxy. S3_PUBLIC_ENDPOINT must point at a root S3 API
+	# origin such as http://localhost:9000 or a dedicated host, not /minio.
 	handle /minio/* {
 		reverse_proxy minio:9000
 	}
