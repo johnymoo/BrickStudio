@@ -547,6 +547,70 @@ def test_parametric_block_plate_uses_lower_height(
     assert abs(meta["bbox_max"][2] - 13.0) < 0.5, meta["bbox_max"]
 
 
+def test_parametric_capture_auto_promotes_to_part(
+    work_in_tmp: Path,
+    app_client: AsyncIterator,
+) -> None:
+    """After worker finalization, a Part row links the capture + GLB asset."""
+    from db.models import Asset, Job, Part
+    from db.session import async_session_factory
+    from workers.tasks.reconstruct import reconstruct
+
+    resp = asyncio.get_event_loop().run_until_complete(
+        app_client.post(
+            "/api/v1/parametric-blocks",
+            data={
+                "part_id": "promote-feile-2x2",
+                "system": "feile",
+                "kind": "brick",
+                "units_x": "2",
+                "units_y": "2",
+                "raw_measurements_mm": (
+                    '{"outer_pitch_mm":33.4,"inner_pitch_mm":6.6,'
+                    '"stud_diameter_mm":9.4,"brick_height_net_mm":19.2,'
+                    '"brick_height_total_mm":24.6}'
+                ),
+            },
+        )
+    )
+    assert resp.status_code == 201, resp.text
+    capture_id = resp.json()["capture_id"]
+
+    result = reconstruct.apply(args=[capture_id])
+    assert result.successful() or result.state == "SUCCESS", result.state
+
+    async def _load() -> tuple[Part | None, list[Asset]]:
+        from sqlalchemy import select
+
+        f = async_session_factory()
+        async with f() as session:
+            part = (
+                await session.scalars(
+                    select(Part).where(Part.capture_id == uuid.UUID(capture_id))
+                )
+            ).one_or_none()
+            job = (
+                await session.scalars(
+                    select(Job).where(Job.capture_id == uuid.UUID(capture_id))
+                )
+            ).first()
+            assets = []
+            if job:
+                result = await session.scalars(select(Asset).where(Asset.job_id == job.id))
+                assets = list(result.all())
+            return part, assets
+
+    part, assets = asyncio.run(_load())
+    assert part is not None, "worker should have auto-promoted the capture to a Part"
+    assert part.source_mode == "parametric_block"
+    assert part.system == "feile" and part.kind == "brick"
+    assert part.units_x == 2 and part.units_y == 2
+    assert part.status == "pending"
+    assert part.name == "promote-feile-2x2"
+    assert len(assets) == 1
+    assert part.asset_id == assets[0].id
+
+
 def _strip_scheme(url: str) -> str:
     """``http://host:port`` -> ``host:port`` (minio client expects no scheme)."""
     return url.split("://", 1)[-1] if "://" in url else url

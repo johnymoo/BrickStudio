@@ -648,6 +648,22 @@ def _finalize_mesh_pipeline(
 
     asyncio.run(_write_asset())
 
+    # ---- Auto-promote into the reusable library (issue #5, best-effort) --
+    # The GLB is already persisted as an asset; promotion is an additive
+    # post-completion action. If it fails we log and continue -- we must NOT
+    # turn a successful reconstruction into a failed job. A worker re-run
+    # upserts idempotently on capture_id.
+    try:
+        from services.part_promoter import promote_capture_to_part
+
+        asyncio.run(promote_capture_to_part(capture_uuid, asset_id))
+    except Exception as exc:  # noqa: BLE001 -- best-effort by design
+        logger.warning(
+            "reconstruct: auto-promote to part failed for capture %s: %s",
+            capture_uuid,
+            exc,
+        )
+
     # ---- Stage 6: final progress + completed event ----------------------
     _emit_progress(self, job_id, progress=100, stage="completed", eta_seconds=0)
     _publish_sync(
