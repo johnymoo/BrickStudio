@@ -21,9 +21,15 @@ export function LibraryList() {
     const controller = new AbortController();
     setLoading(true);
     listLibraryParts(tab, 50, controller.signal)
-      .then((rows) => setParts(rows))
-      .catch(() => setParts([]))
-      .finally(() => setLoading(false));
+      .then((rows) => {
+        if (!controller.signal.aborted) setParts(rows);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setParts([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
     return () => controller.abort();
   }, [tab]);
 
@@ -63,15 +69,17 @@ export function LibraryList() {
           {parts.map((p) => (
             <li key={p.part_id}>
               <Link to={`/library/${p.part_id}`} className="card group block no-underline">
-                <div className="flex items-start justify-between">
-                  <div className="text-sm font-medium text-txt-primary">{p.name}</div>
-                  <PartStatusBadge status={p.status} />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 break-words text-sm font-medium text-txt-primary">{p.name}</div>
+                  <span className="shrink-0">
+                    <PartStatusBadge status={p.status} />
+                  </span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-txt-secondary">
                   <SourceBadge source={p.source_mode} />
                   {p.system ? <span>{p.system}</span> : null}
                   {p.kind ? <span>· {p.kind}</span> : null}
-                  {p.units_x && p.units_y ? (
+                  {p.units_x != null && p.units_y != null ? (
                     <span>
                       · {p.units_x}×{p.units_y}
                     </span>

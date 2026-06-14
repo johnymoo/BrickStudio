@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { LibraryList } from "@features/library/LibraryList";
 
@@ -10,6 +10,16 @@ vi.mock("@lib/api", async () => {
 
 import { listLibraryParts, type LibraryPart } from "@lib/api";
 const listMock = vi.mocked(listLibraryParts);
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function part(over: Partial<LibraryPart>): LibraryPart {
   return {
@@ -67,11 +77,36 @@ describe("LibraryList", () => {
     );
     // Default tab loads pending.
     await waitFor(() => expect(screen.getByText("alpha")).toBeInTheDocument());
-    expect(listMock).toHaveBeenCalledWith("pending", expect.any(Number), expect.anything());
+    expect(listMock).toHaveBeenCalledWith("pending", 50, expect.anything());
     expect(screen.queryByText("trashed")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("library-tab-rejected"));
     await waitFor(() => expect(screen.getByText("trashed")).toBeInTheDocument());
     expect(screen.queryByText("alpha")).not.toBeInTheDocument();
+  });
+
+  it("ignores an aborted pending rejection after the rejected tab resolves", async () => {
+    const pending = deferred<LibraryPart[]>();
+    listMock.mockImplementation(async (status?: string) => {
+      if (status === "rejected") return [part({ part_id: "pr", name: "trashed", status: "rejected" })];
+      return pending.promise;
+    });
+
+    render(
+      <MemoryRouter>
+        <LibraryList />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(listMock).toHaveBeenCalledWith("pending", 50, expect.anything()));
+
+    fireEvent.click(screen.getByTestId("library-tab-rejected"));
+    await waitFor(() => expect(screen.getByText("trashed")).toBeInTheDocument());
+
+    await act(async () => {
+      pending.reject(new DOMException("Aborted", "AbortError"));
+      await pending.promise.catch(() => undefined);
+    });
+
+    expect(screen.getByText("trashed")).toBeInTheDocument();
   });
 });
