@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getLibraryPart, updateLibraryPart, type LibraryPart, type PartStatus } from "@lib/api";
 import { Viewer } from "@features/viewer/Viewer";
@@ -12,6 +12,8 @@ function formatSpec(spec: LibraryPart["derived_spec_mm"]) {
 
 export function LibraryDetail() {
   const { id } = useParams();
+  const currentIdRef = useRef<string | undefined>(id);
+  const mutationSeqRef = useRef(0);
   const [part, setPart] = useState<LibraryPart | null>(null);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -19,7 +21,14 @@ export function LibraryDetail() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  if (currentIdRef.current !== id) {
+    currentIdRef.current = id;
+    mutationSeqRef.current += 1;
+  }
+
   useEffect(() => {
+    setSaving(false);
+
     if (!id) {
       setPart(null);
       setLoading(false);
@@ -51,17 +60,25 @@ export function LibraryDetail() {
 
   async function patch(patchBody: PatchBody) {
     if (!id) return;
+    const patchId = id;
+    const mutationSeq = ++mutationSeqRef.current;
+    const savesEditableFields = "name" in patchBody || "notes" in patchBody;
+    const isCurrentMutation = () => currentIdRef.current === patchId && mutationSeqRef.current === mutationSeq;
     setSaving(true);
     setError(null);
     try {
-      const updated = await updateLibraryPart(id, patchBody, new AbortController().signal);
+      const updated = await updateLibraryPart(patchId, patchBody);
+      if (!isCurrentMutation()) return;
       setPart(updated);
-      setName(updated.name);
-      setNotes(updated.notes ?? "");
+      if (savesEditableFields) {
+        setName(updated.name);
+        setNotes(updated.notes ?? "");
+      }
     } catch (err) {
+      if (!isCurrentMutation()) return;
       setError(err instanceof Error ? err.message : "保存失败");
     } finally {
-      setSaving(false);
+      if (isCurrentMutation()) setSaving(false);
     }
   }
 
