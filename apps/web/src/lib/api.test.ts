@@ -350,13 +350,13 @@ describe("library api", () => {
   it("lists parts", async () => {
     const parts = await listLibraryParts();
     expect(parts).toHaveLength(2);
-    expect(parts[0].name).toBe("alpha");
+    expect(parts.map((part) => part.name)).toEqual(["alpha", "beta"]);
   });
 
   it("filters parts by status", async () => {
     const parts = await listLibraryParts("verified");
     expect(parts).toHaveLength(1);
-    expect(parts[0].name).toBe("beta");
+    expect(parts.map((part) => part.name)).toEqual(["beta"]);
   });
 
   it("gets a part by id", async () => {
