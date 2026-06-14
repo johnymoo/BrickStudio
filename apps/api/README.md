@@ -38,7 +38,7 @@ docker compose \
 apps/api/
 ├── src/
 │   ├── app/             # FastAPI app factory
-│   ├── api/v1/          # 路由 (captures / jobs / assets / health)
+│   ├── api/v1/          # 路由 (captures / ar-captures / parametric-blocks / jobs / assets / health)
 │   ├── core/            # 配置 / 日志 / 异常
 │   ├── db/              # SQLAlchemy 模型 + session
 │   ├── models/          # Pydantic schema
@@ -54,4 +54,19 @@ apps/api/
 └── Dockerfile.dev       # 开发模式 (挂载源码 + --reload)
 ```
 
-具体实现由后续 worker 负责,详见 `docs/design.md` 第 5/6/7 节。
+## 当前 API 入口
+
+| 路径                                                     | 用途                                                                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `POST /api/v1/captures`                                  | 多照片采集, 写 MinIO 原图并派发重建任务                                  |
+| `GET /api/v1/captures` / `GET /api/v1/captures/{id}`     | 最近采集列表与采集详情                                                   |
+| `GET /api/v1/captures/{id}/images`                       | 为某个采集的原图生成预签名 URL                                           |
+| `POST /api/v1/ar-captures`                               | ARCore RGB/depth 识别; 低置信返回 `needs_measurement`                    |
+| `POST /api/v1/parametric-blocks`                         | 5 个卡尺值生成参数化 GLB                                                 |
+| `GET /api/v1/jobs/{id}` / `GET /api/v1/jobs/{id}/stream` | 任务状态与 SSE 进度                                                      |
+| `GET /api/v1/assets/{id}`                                | 3D 产物下载 URL; `Accept: application/json` 返回 JSON, 否则 302 到 MinIO |
+
+MinIO 预签名 URL 由 `S3_PUBLIC_ENDPOINT` 决定浏览器可访问 host。局域网手机调试时把它设成
+`http://<LAN-IP>:9000`; 不要使用 `/minio` 路径代理。
+
+具体实现详见 `docs/design.md` 第 5/6/7 节。

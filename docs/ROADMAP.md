@@ -16,7 +16,7 @@
 
 FastAPI / SQLAlchemy 2 async / asyncpg / Pydantic 2 / Celery 5 / MinIO。
 
-- 端点: `POST /api/v1/captures`, `GET /api/v1/captures/{id}`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/stream` (SSE), `GET /api/v1/assets/{id}`。
+- 端点: `POST /api/v1/captures`, `GET /api/v1/captures`, `GET /api/v1/captures/{id}`, `GET /api/v1/captures/{id}/images`, `POST /api/v1/ar-captures`, `POST /api/v1/parametric-blocks`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/stream` (SSE), `GET /api/v1/assets/{id}`。
 - 表: `captures` / `jobs` / `assets` 三张 + alembic 迁移。
 - 12/12 单测全过, `deliverable.md` 冻结。
 
@@ -109,6 +109,8 @@ ARCore 手机上传 top-down 凸点照片 + 16-bit 深度 + 相机内参, 后端
 - `POST /api/v1/ar-captures` — multipart 上传 (RGB + depth + ar_metadata JSON + 角度照片), 同步识别, 201 返回 `recognized` 或 `needs_measurement`。
 - Worker `_run_ar_recognized_pipeline` — 从 Capture 行读 system/kind/units → `BlockSpec` → `export_glb` → `_finalize_mesh_pipeline`, 复用 parametric 路径的 mesh pipeline。
 - DB: `captures` 表加 `ar_metadata` + `recognition_result` JSONB 列 (migration `0004`)。
+- Web/API visibility follow-up: `GET /api/v1/captures` + `GET /api/v1/captures/{id}/images` 支持把 `needs_measurement` AR 采集显示在首页和 `/captures/:id` 详情页。
+- Asset delivery follow-up: `GET /api/v1/assets/{id}` 对 SPA 的 `Accept: application/json` 返回 JSON envelope, 直接打开仍 302 到 MinIO 预签名 URL。
 - Config: `ar_pitch_tolerance_mm` (3.0mm) + `ar_min_confidence` (0.6)。
 - Tests: 14 单元 + 3 端点校验 + 1 worker + 1 e2e (POST → worker → GLB), MinIO 集成测试受环境影响。
 

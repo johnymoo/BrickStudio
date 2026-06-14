@@ -89,6 +89,11 @@
 
    停: `docker compose -f deploy/docker-compose.yml down`
 
+   手机或局域网设备访问 `http://<LAN-IP>:5173` 时, `deploy/.env`
+   里的 `S3_PUBLIC_ENDPOINT` 也要改成浏览器能直接访问的 MinIO API
+   根地址, 例如 `http://<LAN-IP>:9000`。不要写 `/minio` 这种路径,
+   S3 预签名会绑定 host/path, 改写后会触发 `SignatureDoesNotMatch`。
+
 ### 拍积木 (浏览器)
 
 1. **打开网页**: 浏览器访问 <http://localhost> (Caddy 80 端口) 或
@@ -116,6 +121,7 @@
 | 状态卡 "上传中" 很久 | Celery worker 没起 | 查 `docker compose ps` 看 `worker` healthy |
 | 状态到 "失败" | 缺纹理 / 纯色 / 拍摄角度太近 | 删掉模糊的几张, 重新拍 (背景别用纯色, 加点花纹) |
 | 状态完成但 mesh 是球 | 走的 Open3D fallback icosphere, 不是真 SfM | 装 COLMAP + 拍 ≥8 张 (用有阴影的背景) |
+| 3D 预览显示 `模型加载失败` / HTTP 403 | `S3_PUBLIC_ENDPOINT` 不是浏览器可访问的 MinIO API 根地址 | 改 `deploy/.env` 为 `http://<LAN-IP>:9000`, 重启 API / worker |
 | 拍出来像素 < 8 张提示 | 拍照张数 < 8 | 多拍几张, ≥8 张走真 SfM |
 | 拍出来像素 > 20 张报错 | 后端硬限 20 | 删到 20 张以内 |
 
@@ -173,6 +179,17 @@ docker compose -f deploy/docker-compose.yml down -v
 
 支持 `bash scripts/up.sh --dev` (叠加 docker-compose.dev.yml, Vite + HMR + Playwright 镜像),
 `--no-migrate`, `--logs` (起完自动追日志)。
+
+局域网调试时同步修改:
+
+```env
+PUBLIC_WEB_BASE_URL=http://<LAN-IP>:5173
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://<LAN-IP>:5173
+S3_PUBLIC_ENDPOINT=http://<LAN-IP>:9000
+```
+
+`S3_ENDPOINT` 仍是 API / worker 内部访问 MinIO 的地址, Docker 环境通常保持
+`http://minio:9000`; `S3_PUBLIC_ENDPOINT` 才是写入预签名下载 URL 的浏览器可见地址。
 
 ### 2. 跑测试
 

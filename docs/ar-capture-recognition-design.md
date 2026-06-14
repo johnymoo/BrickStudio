@@ -51,6 +51,8 @@
 - `status`: `"recognized"` | `"needs_measurement"`。
 - `needs_measurement` 非空时形如 `{"fields": ["outer_pitch_mm", ...], "guidance": "卡两端外边缘…"}`。
 - GLB 仍走现有 `GET /assets/{asset_id}`；进度走现有 `GET /jobs/{id}/stream`。
+- 识别失败但已上传的采集可通过 `GET /api/v1/captures` 进入列表, 再用
+  `GET /api/v1/captures/{capture_id}/images` 查看原图预签名 URL 和 fallback 指引。
 
 ## 4. 识别 + 尺度 + 拟合门算法
 
@@ -65,7 +67,7 @@
 4. **kind**：取上传的用户确认值（默认 `brick`）。
 5. **拟合门**：
    - 高置信（节距入某体系容差 + 凸点网格清晰）→ `BlockSpec(system, kind, units)` 标准规格 → `export_glb()`。
-   - 低置信（节距不匹配 / 凸点不清 / `system_hint=unknown`）→ `Job` 标 `needs_measurement` + 指引，不产 GLB。
+   - 低置信（节距不匹配 / 凸点不清 / `system_hint=unknown`）→ Capture 保留 `recognition_result` 与 `needs_measurement` 指引, 不产 GLB / job。
 
 ### 已知体系单位节距（`classify_system` 基准，源自 `block_generator.py` 公开规格表）
 | system | unit (mm) | knob_Ø (mm) | brick_h (mm) |
@@ -85,7 +87,7 @@
 1. 载入 `Capture`（含 `ar_metadata`、图像 keys）。
 2. 从 MinIO 取 `recognition_rgb` + `recognition_depth` → 跑 `brick_recognizer`。
 3. 高置信 → 写 `system/kind/units_x/units_y` + `derived_spec_mm`（标准规格）→ `BlockSpec` → `export_glb()` → `_finalize_mesh_pipeline`（与参数化路径同一收尾，写 asset）。
-4. 低置信 → 更新 job 状态 `needs_measurement` + 写 `recognition_result`，不产 asset。
+4. 低置信 → 不创建 job, 在 Capture 上写 `recognition_result` 并通过 `needs_measurement` 指引进入卡尺兜底, 不产 asset。
 
 **DB**（`captures` 表）：
 - 复用已有 `system / kind / units_x / units_y / derived_spec_mm / cross_check_warnings`。

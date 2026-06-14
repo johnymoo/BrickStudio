@@ -36,12 +36,14 @@ apps/web/
 ├── src/
 │   ├── features/        # 按业务功能划分
 │   │   ├── capture/     # 拍照采集 (CapturePage + tests)
+│   │   ├── captures/    # 采集详情, 显示 needs_measurement 指引和原图
+│   │   ├── parametric/  # 4 步卡尺参数化建模 wizard
 │   │   ├── viewer/      # 3D 查看器 (Viewer + tests)
 │   │   └── jobs/        # 任务状态 (JobList + JobDetail)
 │   ├── components/      # 通用 UI 组件 (AppHeader / StatusBadge / ProgressBar / InstallPrompt)
 │   ├── lib/             # API client (api.ts) + 工具 (format.ts) + tests
 │   ├── stores/          # zustand stores (useJobStore + tests)
-│   ├── App.tsx          # 路由 (/, /capture, /jobs/:id)
+│   ├── App.tsx          # 路由 (/, /parametric, /jobs/:id, /captures/:id)
 │   ├── main.tsx         # 启动 React + BrowserRouter
 │   └── index.css        # Tailwind + 组件 utility class
 ├── public/              # PWA 静态资源 (favicon.svg / icon-192.svg / icon-512.svg)
@@ -71,3 +73,11 @@ apps/web/
 
 所有路径都走 `/api/v1/...`,Vite dev server 把它代理到 `http://localhost:8000`。
 生产环境由 Caddy 转发(`/api/*` → `api:8000`)。
+
+前端 `request()` 默认发送 `Accept: application/json`。因此 `getAssetUrl()` 会从
+`GET /api/v1/assets/{id}` 拿 JSON envelope, 再把其中的 MinIO 预签名 URL 交给
+Three.js loader。直接在浏览器打开 asset endpoint 仍可走 302 下载。
+
+首页数据来源有两类:
+- 本地 `useJobStore` (`blocktool.jobs.v1`) 保存当前浏览器提交的 job, 包括 `/parametric` 生成的 job。
+- 后端 `GET /api/v1/captures?limit=20` 补充显示 AR 识别失败且需要测量的采集, 点击进入 `/captures/:id` 查看原图和 fallback 指引。
