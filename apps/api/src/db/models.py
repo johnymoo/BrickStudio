@@ -95,6 +95,9 @@ class Capture(Base):
     updated_at: Mapped[datetime] = make_updated_at()
 
     jobs: Mapped[list[Job]] = relationship(back_populates="capture", lazy="selectin")
+    part: Mapped[Part | None] = relationship(
+        back_populates="capture", uselist=False, lazy="selectin"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,4 +158,56 @@ class Asset(Base):
     job: Mapped[Job] = relationship(back_populates="assets", lazy="selectin")
 
 
-__all__ = ["Asset", "Capture", "Job"]
+# ---------------------------------------------------------------------------
+# parts (issue #5 — reusable library part, 1:1 with a completed capture)
+# ---------------------------------------------------------------------------
+class Part(Base):
+    """A durable, curated library entry promoted from a completed capture.
+
+    1:1 with its source capture (``capture_id`` unique). Holds a *snapshot*
+    of the capture's spec at promotion time plus curation metadata
+    (``name`` / ``notes`` / ``color``) and a review ``status``. The linked
+    GLB lives on ``asset_id``; provenance is the ``capture`` relationship.
+    """
+
+    __tablename__ = "parts"
+    __table_args__ = (
+        Index("ix_parts_capture_id", "capture_id", unique=True),
+        Index("ix_parts_asset_id", "asset_id"),
+        Index("ix_parts_status", "status"),
+    )
+
+    id: Mapped[UUID] = make_uuid_pk()
+    capture_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("captures.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    #: The GLB asset this part renders. Nullable so the part survives if the
+    #: asset is regenerated; SET NULL on asset delete.
+    asset_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    #: Snapshot of ``capture.mode`` at promotion: photo / parametric_block / ar_recognized.
+    source_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    system: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    units_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    units_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    derived_spec_mm: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    color: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Review state: pending / verified / rejected.
+    status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="pending", server_default="pending"
+    )
+    created_at: Mapped[datetime] = make_created_at()
+    updated_at: Mapped[datetime] = make_updated_at()
+
+    capture: Mapped[Capture] = relationship(back_populates="part", lazy="selectin")
+
+
+__all__ = ["Asset", "Capture", "Job", "Part"]
