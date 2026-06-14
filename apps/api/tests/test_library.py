@@ -136,6 +136,18 @@ async def test_patch_library_part_rejects_null_name(app_client) -> None:
     assert resp.status_code == 422, resp.text
 
 
+async def test_patch_library_part_rejects_empty_name(app_client) -> None:
+    part_id = await _make_part()
+    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"name": ""})
+    assert resp.status_code == 422, resp.text
+
+
+async def test_patch_library_part_rejects_name_over_db_limit(app_client) -> None:
+    part_id = await _make_part()
+    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"name": "x" * 129})
+    assert resp.status_code == 422, resp.text
+
+
 async def test_patch_library_part_rejects_null_status(app_client) -> None:
     part_id = await _make_part()
     resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"status": None})

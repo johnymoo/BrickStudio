@@ -305,7 +305,7 @@ class LibraryPartUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=128)
     notes: str | None = None
     status: Literal["pending", "verified", "rejected"] | None = None
 
