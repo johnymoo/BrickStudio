@@ -71,6 +71,67 @@ def test_presigned_get_signs_with_public_endpoint_when_configured(monkeypatch) -
     assert FakeMinio.instances[1].calls[0][:2] == ("models", "mesh.glb")
 
 
+def test_presigned_get_uses_internal_endpoint_when_public_endpoint_unset(monkeypatch) -> None:
+    FakeMinio.instances = []
+    monkeypatch.setattr(minio_client, "Minio", FakeMinio)
+    monkeypatch.setattr(
+        minio_client,
+        "settings",
+        SimpleNamespace(
+            s3_endpoint="http://minio:9000",
+            s3_public_endpoint=None,
+            s3_public_base="http://localhost:9000",
+            s3_access_key="blocktool",
+            s3_secret_key="blocktool",
+            s3_secure=False,
+            s3_region="us-east-1",
+        ),
+    )
+
+    url, _expires_at = StorageClient().presigned_get("models", "mesh.glb")
+
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    assert parsed.netloc == "minio:9000"
+    assert query["signed-host"] == ["minio:9000"]
+    assert [client.endpoint for client in FakeMinio.instances] == ["minio:9000"]
+    assert FakeMinio.instances[0].calls[0][:2] == ("models", "mesh.glb")
+
+
+def test_presigned_get_uses_injected_client_when_public_endpoint_differs(monkeypatch) -> None:
+    FakeMinio.instances = []
+    injected = FakeMinio(
+        endpoint="injected-minio:9000",
+        access_key="blocktool",
+        secret_key="blocktool",
+        secure=False,
+        region="us-east-1",
+    )
+    monkeypatch.setattr(minio_client, "Minio", FakeMinio)
+    monkeypatch.setattr(
+        minio_client,
+        "settings",
+        SimpleNamespace(
+            s3_endpoint="http://minio:9000",
+            s3_public_endpoint="http://192.168.88.75:9000",
+            s3_public_base="http://192.168.88.75:9000",
+            s3_access_key="blocktool",
+            s3_secret_key="blocktool",
+            s3_secure=False,
+            s3_region="us-east-1",
+        ),
+    )
+
+    url, _expires_at = StorageClient(client=injected).presigned_get("models", "mesh.glb")
+
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    assert parsed.netloc == "injected-minio:9000"
+    assert query["signed-host"] == ["injected-minio:9000"]
+    assert FakeMinio.instances == [injected]
+    assert injected.calls[0][:2] == ("models", "mesh.glb")
+
+
 def test_public_endpoint_with_path_fails_clearly(monkeypatch) -> None:
     monkeypatch.setattr(minio_client, "Minio", FakeMinio)
     monkeypatch.setattr(

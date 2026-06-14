@@ -30,16 +30,19 @@ class StorageClient:
     """Thin facade around the MinIO client used by the rest of the app."""
 
     def __init__(self, client: Minio | None = None) -> None:
-        self._client = client or Minio(
-            endpoint=_strip_scheme(settings.s3_endpoint),
-            access_key=settings.s3_access_key,
-            secret_key=settings.s3_secret_key,
-            secure=settings.s3_secure,
-            region=settings.s3_region,
-        )
+        owns_client = client is None
+        if client is None:
+            client = Minio(
+                endpoint=_strip_scheme(settings.s3_endpoint),
+                access_key=settings.s3_access_key,
+                secret_key=settings.s3_secret_key,
+                secure=settings.s3_secure,
+                region=settings.s3_region,
+            )
+        self._client = client
         self._presign_client = self._client
         public_endpoint = settings.s3_public_endpoint
-        if public_endpoint:
+        if owns_client and public_endpoint:
             _validate_presign_endpoint(public_endpoint)
             if public_endpoint.rstrip("/") != settings.s3_endpoint.rstrip("/"):
                 endpoint, secure = _minio_endpoint_and_secure(
