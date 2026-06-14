@@ -183,7 +183,7 @@ updateLibraryPart(id, { name?, notes?, status? }, signal?): Promise<LibraryPart>
 
 **`LibraryList`**（`features/library/LibraryList.tsx`）：
 
-- 顶部 status tab：`待核验 / 已核验 / 已拒绝`。**默认展示非 rejected**（待核验 + 已核验合并），点「已拒绝」tab 才显示被拒零件。（避免「全部却隐藏拒绝」的歧义。）
+- 顶部 status tab：`待核验 / 已核验 / 已拒绝`，每个 tab 按对应单一 status 过滤（后端 `?status=` 实现）。**默认选中「待核验」**，因此 rejected 零件默认隐藏、只在「已拒绝」tab 显示。（每个 tab 标签 = 它实际展示的 status，无歧义。）
 - 卡片列表复用现有 `card` 样式：显示 `name`、`source_mode` 徽章、`system kind units_x×units_y`、`status` 徽章、相对时间。
 - 每张卡 `Link` 到 `/library/:id`。空态复用现有 EmptyState 风格。
 
