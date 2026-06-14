@@ -113,6 +113,12 @@
   .badge-failed {
     @apply badge bg-err-bg text-err;
   }
+  .badge-verified {
+    @apply badge bg-ok-bg text-ok;
+  }
+  .badge-rejected {
+    @apply badge bg-err-bg text-err;
+  }
 }
 
 @layer utilities {
