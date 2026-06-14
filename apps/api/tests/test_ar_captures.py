@@ -67,6 +67,59 @@ async def test_ar_capture_unknown_hint_needs_measurement(app_client: AsyncIterat
     assert "outer_pitch_mm" in body["needs_measurement"]["fields"]
 
 
+async def test_ar_capture_needs_measurement_is_visible_from_capture_detail(app_client: AsyncIterator) -> None:
+    from db.models import Capture
+    from db.session import async_session_factory
+
+    capture_uuid = uuid.uuid4()
+    factory = async_session_factory()
+    async with factory() as session:
+        session.add(
+            Capture(
+                id=capture_uuid,
+                part_id="ar-brick-test",
+                status="pending",
+                image_count=4,
+                image_keys=[
+                    f"raw/{capture_uuid}/000.png",
+                    f"raw/{capture_uuid}/001.png",
+                    f"raw/{capture_uuid}/002.png",
+                    f"raw/{capture_uuid}/003.png",
+                ],
+                capture_mode="phone_walkaround",
+                mode="ar_recognized",
+                kind="brick",
+                recognition_result={
+                    "ok": False,
+                    "reason": "low_confidence",
+                    "confidence": 0.2,
+                },
+            )
+        )
+        await session.commit()
+    capture_id = str(capture_uuid)
+
+    resp = await app_client.get(f"/api/v1/captures/{capture_id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["capture_id"] == capture_id
+    assert body["mode"] == "ar_recognized"
+    assert body["kind"] == "brick"
+    assert body["job_id"] is None
+    assert body["image_keys"] == [
+        f"raw/{capture_id}/000.png",
+        f"raw/{capture_id}/001.png",
+        f"raw/{capture_id}/002.png",
+        f"raw/{capture_id}/003.png",
+    ]
+    assert body["recognition_result"]["ok"] is False
+    assert body["recognition_result"]["reason"] is not None
+    assert body["needs_measurement"]["reason"] == body["recognition_result"]["reason"]
+    assert body["needs_measurement"]["endpoint"] == "/api/v1/parametric-blocks"
+    assert "outer_pitch_mm" in body["needs_measurement"]["fields"]
+    assert body["updated_at"] is not None
+
+
 async def test_ar_capture_rejects_missing_depth(app_client: AsyncIterator) -> None:
     rgb, _depth, meta = make_ar_bundle("feile")
     resp = await app_client.post(

@@ -7,20 +7,49 @@
 
 const API_BASE = "/api/v1";
 
-export type CaptureStatus = "pending" | "running" | "completed" | "failed";
+export type CaptureStatus = "pending" | "running" | "completed" | "failed" | "needs_measurement";
 export type JobStatus = "pending" | "running" | "completed" | "failed";
+
+export interface NeedsMeasurement {
+  fields: string[];
+  guidance: string;
+  endpoint: string;
+  reason?: string | null;
+}
 
 export interface CaptureResponse {
   capture_id: string;
   part_id: string;
   image_count: number;
   status: CaptureStatus;
-  job_id?: string;
+  job_id?: string | null;
+  image_keys?: string[];
+  capture_mode?: string;
+  mode?: string;
+  system?: string | null;
+  kind?: string | null;
+  units_x?: number | null;
+  units_y?: number | null;
+  recognition_result?: Record<string, unknown> | null;
+  needs_measurement?: NeedsMeasurement | null;
 }
 
 export interface CaptureInfo extends CaptureResponse {
   created_at: string;
-  updated_at: string;
+  updated_at?: string | null;
+  image_keys: string[];
+  capture_mode: string;
+}
+
+export interface CaptureImageInfo {
+  key: string;
+  url: string;
+  expires_at?: string | null;
+}
+
+export interface CaptureImagesResponse {
+  capture_id: string;
+  images: CaptureImageInfo[];
 }
 
 export interface JobInfo {
@@ -164,6 +193,15 @@ export async function createCapture(
 
 export async function getCapture(id: string, signal?: AbortSignal): Promise<CaptureInfo> {
   return request<CaptureInfo>(`/captures/${encodeURIComponent(id)}`, { method: "GET" }, signal);
+}
+
+export async function listCaptures(limit = 20, signal?: AbortSignal): Promise<CaptureInfo[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  return request<CaptureInfo[]>(`/captures?${params.toString()}`, { method: "GET" }, signal);
+}
+
+export async function getCaptureImages(id: string, signal?: AbortSignal): Promise<CaptureImagesResponse> {
+  return request<CaptureImagesResponse>(`/captures/${encodeURIComponent(id)}/images`, { method: "GET" }, signal);
 }
 
 export async function getJob(id: string, signal?: AbortSignal): Promise<JobInfo> {

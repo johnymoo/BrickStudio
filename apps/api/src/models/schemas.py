@@ -10,6 +10,25 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
+# Measurement fallback shared by AR capture responses and capture detail
+# ---------------------------------------------------------------------------
+class NeedsMeasurement(BaseModel):
+    """Returned when recognition confidence is too low — caliper fallback."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The 5 caliper fields the client should collect (same as
+    #: ``/parametric-blocks``).
+    fields: list[str] = Field(default_factory=list)
+    #: Human-readable, caliper-friendly guidance ("卡两端外边缘…").
+    guidance: str
+    #: Where to submit the measured fallback.
+    endpoint: str = "/api/v1/parametric-blocks"
+    #: Why recognition fell back (for logs / UI).
+    reason: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Capture
 # ---------------------------------------------------------------------------
 class CaptureCreate(BaseModel):
@@ -32,11 +51,34 @@ class CaptureRead(BaseModel):
     status: str
     image_count: int
     created_at: datetime
+    updated_at: datetime | None = None
     job_id: UUID | None = None
     image_keys: list[str] = Field(default_factory=list)
     # Phase 2 (design-phase2.md §3.1): how the user captured the
     # photos. Default ``phone_walkaround`` matches the design contract.
     capture_mode: str = "phone_walkaround"
+    mode: str = "photo"
+    system: str | None = None
+    kind: str | None = None
+    units_x: int | None = None
+    units_y: int | None = None
+    recognition_result: dict[str, Any] | None = None
+    needs_measurement: NeedsMeasurement | None = None
+
+
+class CaptureImageRead(BaseModel):
+    """A browser-fetchable URL for one raw image owned by a capture."""
+
+    key: str
+    url: str
+    expires_at: datetime | None = None
+
+
+class CaptureImagesRead(BaseModel):
+    """Response for ``GET /captures/{capture_id}/images``."""
+
+    capture_id: UUID
+    images: list[CaptureImageRead] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -194,22 +236,6 @@ class RecognizedBlock(BaseModel):
     confidence: float = 0.0
 
 
-class NeedsMeasurement(BaseModel):
-    """Returned when recognition confidence is too low — caliper fallback."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    #: The 5 caliper fields the client should collect (same as
-    #: ``/parametric-blocks``).
-    fields: list[str] = Field(default_factory=list)
-    #: Human-readable, caliper-friendly guidance ("卡两端外边缘…").
-    guidance: str
-    #: Where to submit the measured fallback.
-    endpoint: str = "/api/v1/parametric-blocks"
-    #: Why recognition fell back (for logs / UI).
-    reason: str | None = None
-
-
 class ArCaptureRead(BaseModel):
     """Response shape for ``POST /api/v1/ar-captures``."""
 
@@ -281,6 +307,8 @@ __all__ = [
     "ArCaptureRead",
     "AssetRead",
     "CaptureCreate",
+    "CaptureImageRead",
+    "CaptureImagesRead",
     "CaptureRead",
     "ErrorDetail",
     "ErrorEnvelope",

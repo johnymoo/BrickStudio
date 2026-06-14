@@ -1,12 +1,27 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useJobStore, selectJobList, type JobRecord } from "@stores/useJobStore";
 import { StatusBadge } from "@components/StatusBadge";
 import { ProgressBar } from "@components/ProgressBar";
 import { formatTimeAgo } from "@lib/format";
+import { listCaptures, type CaptureInfo } from "@lib/api";
 
 export function JobList() {
   const jobs = useJobStore(selectJobList);
   const removeJob = useJobStore((s) => s.removeJob);
+  const [recentCaptures, setRecentCaptures] = useState<CaptureInfo[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    listCaptures(20, controller.signal)
+      .then((captures) => {
+        setRecentCaptures(captures.filter((capture) => capture.needs_measurement));
+      })
+      .catch(() => {
+        setRecentCaptures([]);
+      });
+    return () => controller.abort();
+  }, []);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -15,9 +30,9 @@ export function JobList() {
         <span className="text-xs text-txt-secondary">{jobs.length} 个模型</span>
       </div>
 
-      {jobs.length === 0 ? (
+      {jobs.length === 0 && recentCaptures.length === 0 ? (
         <EmptyState />
-      ) : (
+      ) : jobs.length > 0 ? (
         <ul className="space-y-2.5">
           {jobs.map((job) => (
             <li key={job.id}>
@@ -25,7 +40,51 @@ export function JobList() {
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
+
+      {recentCaptures.length > 0 ? (
+        <section className={jobs.length > 0 ? "mt-6" : ""}>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-base font-medium text-txt-primary">需要测量的采集</h2>
+            <span className="text-xs text-txt-secondary">{recentCaptures.length} 个采集</span>
+          </div>
+          <ul className="space-y-2.5">
+            {recentCaptures.map((capture) => (
+              <li key={capture.capture_id}>
+                <CaptureRow capture={capture} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function CaptureRow({ capture }: { capture: CaptureInfo }) {
+  const reason = capture.needs_measurement?.reason ?? "识别置信度不足";
+  return (
+    <div className="card">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-sm font-medium text-txt-primary">{capture.part_id}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-txt-secondary">
+            <span>{capture.image_count} 张照片</span>
+            <span>·</span>
+            <span>{formatTimeAgo(capture.created_at)}</span>
+            <span>·</span>
+            <span>{reason}</span>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Link to={`/captures/${capture.capture_id}`} className="btn-secondary text-xs">
+            查看采集
+          </Link>
+          <Link to="/parametric" className="btn-primary text-xs">
+            补充测量
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

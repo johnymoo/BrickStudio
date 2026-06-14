@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { JobList } from "@features/jobs/JobList";
 import { JobDetail } from "@features/jobs/JobDetail";
 import { ParametricPage } from "@features/parametric/ParametricPage";
+import { CaptureDetail } from "@features/captures/CaptureDetail";
 import { AppHeader } from "@components/AppHeader";
 import { InstallPrompt } from "@components/InstallPrompt";
 
@@ -14,6 +15,7 @@ export default function App() {
           <Route path="/" element={<JobList />} />
           <Route path="/parametric" element={<ParametricPage />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
+          <Route path="/captures/:id" element={<CaptureDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

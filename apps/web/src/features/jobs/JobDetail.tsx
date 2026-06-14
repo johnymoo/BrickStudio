@@ -275,7 +275,7 @@ export function JobDetail() {
               id: newJobId,
               captureId: response.capture_id,
               partId: response.part_id,
-              status: response.status,
+              status: response.status === "needs_measurement" ? "pending" : response.status,
               progress: 0,
               stage: null,
               error: null,

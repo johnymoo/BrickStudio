@@ -5,13 +5,14 @@ import logging
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, File, Form, UploadFile, status
+from fastapi import APIRouter, File, Form, Query, UploadFile, status
 from sqlalchemy import select
 
+from app.config import settings
 from app.deps import DBSessionDep
 from core.errors import CaptureInvalid, CaptureNotFound
 from db.models import Capture, Job
-from models.schemas import CaptureRead
+from models.schemas import CaptureImagesRead, CaptureImageRead, CaptureRead, NeedsMeasurement
 from storage.minio_client import raw_object_key, storage
 from workers.tasks.reconstruct import reconstruct as reconstruct_task
 
@@ -35,6 +36,19 @@ ALLOWED_CONTENT_TYPES = {
 #: design-phase2.md §3.1 contract).
 CaptureMode = Literal["phone_walkaround", "studio_turntable", "quick_snapshot"]
 DEFAULT_CAPTURE_MODE: CaptureMode = "phone_walkaround"
+
+_MEASUREMENT_FIELDS = [
+    "outer_pitch_mm",
+    "inner_pitch_mm",
+    "stud_diameter_mm",
+    "brick_height_net_mm",
+    "brick_height_total_mm",
+]
+_GUIDANCE = (
+    "无法自动识别。请用游标卡尺测 5 个值并提交到 /api/v1/parametric-blocks："
+    "outer_pitch_mm、inner_pitch_mm、stud_diameter_mm、"
+    "brick_height_net_mm、brick_height_total_mm。"
+)
 
 
 @router.post(
@@ -129,10 +143,22 @@ async def create_capture(
         status=capture.status,
         image_count=capture.image_count,
         created_at=capture.created_at,
+        updated_at=capture.updated_at,
         job_id=job.id,
         image_keys=capture.image_keys,
         capture_mode=capture_mode,
     )
+
+
+@router.get("", response_model=list[CaptureRead], summary="List recent captures")
+async def list_captures(
+    session: DBSessionDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[CaptureRead]:
+    stmt = select(Capture).order_by(Capture.created_at.desc()).limit(limit)
+    captures = list((await session.scalars(stmt)).all())
+    job_ids = await _latest_job_ids(session, [capture.id for capture in captures])
+    return [_capture_read(capture, job_ids.get(capture.id)) for capture in captures]
 
 
 @router.get("/{capture_id}", response_model=CaptureRead, summary="Read a capture")
@@ -141,15 +167,77 @@ async def get_capture(capture_id: uuid.UUID, session: DBSessionDep) -> CaptureRe
     if capture is None:
         raise CaptureNotFound(f"capture {capture_id} not found")
     job_id = await session.scalar(select(Job.id).where(Job.capture_id == capture_id).order_by(Job.created_at.desc()))
+    return _capture_read(capture, job_id)
+
+
+@router.get("/{capture_id}/images", response_model=CaptureImagesRead, summary="Read raw capture image URLs")
+async def get_capture_images(capture_id: uuid.UUID, session: DBSessionDep) -> CaptureImagesRead:
+    capture = await session.get(Capture, capture_id)
+    if capture is None:
+        raise CaptureNotFound(f"capture {capture_id} not found")
+
+    images: list[CaptureImageRead] = []
+    for key in capture.image_keys or []:
+        presigned = storage.presigned_get(settings.s3_bucket_raw, key)
+        if isinstance(presigned, tuple):
+            url, expires_at = presigned
+        else:
+            url, expires_at = presigned, None
+        images.append(CaptureImageRead(key=key, url=url, expires_at=expires_at))
+    return CaptureImagesRead(capture_id=capture.id, images=images)
+
+
+async def _latest_job_ids(session: DBSessionDep, capture_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+    if not capture_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(Job.capture_id, Job.id)
+            .where(Job.capture_id.in_(capture_ids))
+            .order_by(Job.capture_id, Job.created_at.desc())
+        )
+    ).all()
+    job_ids: dict[uuid.UUID, uuid.UUID] = {}
+    for capture_id, job_id in rows:
+        job_ids.setdefault(capture_id, job_id)
+    return job_ids
+
+
+def _capture_read(capture: Capture, job_id: uuid.UUID | None) -> CaptureRead:
     return CaptureRead(
         capture_id=capture.id,
         part_id=capture.part_id,
-        status=capture.status,
+        status=_capture_status(capture, job_id),
         image_count=capture.image_count,
         created_at=capture.created_at,
+        updated_at=capture.updated_at,
         job_id=job_id,
-        image_keys=capture.image_keys,
+        image_keys=capture.image_keys or [],
         capture_mode=getattr(capture, "capture_mode", DEFAULT_CAPTURE_MODE),
+        mode=getattr(capture, "mode", "photo"),
+        system=capture.system,
+        kind=capture.kind,
+        units_x=capture.units_x,
+        units_y=capture.units_y,
+        recognition_result=capture.recognition_result,
+        needs_measurement=_needs_measurement(capture, job_id),
+    )
+
+
+def _capture_status(capture: Capture, job_id: uuid.UUID | None) -> str:
+    if _needs_measurement(capture, job_id) is not None:
+        return "needs_measurement"
+    return capture.status
+
+
+def _needs_measurement(capture: Capture, job_id: uuid.UUID | None) -> NeedsMeasurement | None:
+    recognition = capture.recognition_result or {}
+    if capture.mode != "ar_recognized" or job_id is not None:
+        return None
+    return NeedsMeasurement(
+        fields=_MEASUREMENT_FIELDS,
+        guidance=_GUIDANCE,
+        reason=recognition.get("reason"),
     )
 
 
