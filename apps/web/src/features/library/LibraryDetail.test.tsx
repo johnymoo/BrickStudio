@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useLayoutEffect } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { LibraryDetail } from "@features/library/LibraryDetail";
 
 vi.mock("@lib/api", async () => {
@@ -61,7 +62,18 @@ function GoToP2() {
   );
 }
 
-function renderWithNavigation() {
+type RouteSnapshot = { routeId: string | undefined; nameValue: string | null; bodyText: string };
+
+function RouteProbe({ onLayout }: { onLayout?: (snapshot: RouteSnapshot) => void }) {
+  const { id } = useParams();
+  useLayoutEffect(() => {
+    const nameInput = document.querySelector<HTMLInputElement>('[data-testid="part-name-input"]');
+    onLayout?.({ routeId: id, nameValue: nameInput?.value ?? null, bodyText: document.body.textContent ?? "" });
+  });
+  return null;
+}
+
+function renderWithNavigation(onLayout?: (snapshot: RouteSnapshot) => void) {
   return render(
     <MemoryRouter initialEntries={["/library/p1"]}>
       <Routes>
@@ -71,6 +83,7 @@ function renderWithNavigation() {
             <>
               <GoToP2 />
               <LibraryDetail />
+              <RouteProbe onLayout={onLayout} />
             </>
           }
         />
@@ -119,6 +132,28 @@ describe("LibraryDetail", () => {
     );
   });
 
+  it("disables editable fields while a save is in flight", async () => {
+    const save = deferred<LibraryPart>();
+    getMock.mockResolvedValue(base);
+    updateMock.mockReturnValue(save.promise);
+    renderAt();
+    await waitFor(() => expect(screen.getByDisplayValue("alpha")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId("part-name-input"), { target: { value: "renamed" } });
+    fireEvent.change(screen.getByTestId("part-notes-input"), { target: { value: "draft note" } });
+    fireEvent.click(screen.getByTestId("part-save-btn"));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith("p1", expect.objectContaining({ name: "renamed", notes: "draft note" })),
+    );
+    expect(screen.getByTestId("part-name-input")).toBeDisabled();
+    expect(screen.getByTestId("part-notes-input")).toBeDisabled();
+    expect(screen.getByTestId("part-save-btn")).toBeDisabled();
+
+    save.resolve({ ...base, name: "renamed", notes: "draft note" });
+    await waitFor(() => expect(screen.getByTestId("part-save-btn")).not.toBeDisabled());
+  });
+
   it("preserves unsaved notes when applying a status update", async () => {
     getMock.mockResolvedValue(base);
     updateMock.mockResolvedValue({ ...base, status: "verified", notes: null });
@@ -134,16 +169,25 @@ describe("LibraryDetail", () => {
   it("ignores stale mutation responses after navigating to another part", async () => {
     const p2 = { ...base, part_id: "p2", capture_id: "c2", asset_id: "a2", name: "beta", notes: "p2 note" };
     const statusUpdate = deferred<LibraryPart>();
-    getMock.mockImplementation((id) => Promise.resolve(id === "p2" ? p2 : base));
+    const p2Load = deferred<LibraryPart>();
+    const routeSnapshots: RouteSnapshot[] = [];
+    getMock.mockImplementation((id) => (id === "p2" ? p2Load.promise : Promise.resolve(base)));
     updateMock.mockReturnValue(statusUpdate.promise);
 
-    renderWithNavigation();
+    renderWithNavigation((snapshot) => routeSnapshots.push(snapshot));
     await waitFor(() => expect(screen.getByDisplayValue("alpha")).toBeInTheDocument());
 
     fireEvent.click(screen.getByTestId("part-verify-btn"));
     await waitFor(() => expect(updateMock).toHaveBeenCalledWith("p1", { status: "verified" }));
 
     fireEvent.click(screen.getByTestId("go-p2"));
+    await waitFor(() => expect(getMock).toHaveBeenCalledWith("p2", expect.any(AbortSignal)));
+    const firstP2Snapshot = routeSnapshots.find((snapshot) => snapshot.routeId === "p2");
+    expect(firstP2Snapshot).toMatchObject({ nameValue: null });
+    expect(firstP2Snapshot?.bodyText).toContain("加载中");
+    expect(firstP2Snapshot?.bodyText).not.toContain("alpha");
+
+    p2Load.resolve(p2);
     await waitFor(() => expect(screen.getByDisplayValue("beta")).toBeInTheDocument());
 
     statusUpdate.resolve({ ...base, status: "verified", name: "p1 server name", notes: "p1 server note" });

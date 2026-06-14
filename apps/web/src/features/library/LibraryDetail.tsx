@@ -18,19 +18,18 @@ export function LibraryDetail() {
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadedRouteId, setLoadedRouteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (currentIdRef.current !== id) {
+  useEffect(() => {
     currentIdRef.current = id;
     mutationSeqRef.current += 1;
-  }
-
-  useEffect(() => {
     setSaving(false);
 
     if (!id) {
       setPart(null);
+      setLoadedRouteId(null);
       setLoading(false);
       setError("缺少零件 ID");
       return;
@@ -38,17 +37,20 @@ export function LibraryDetail() {
 
     const controller = new AbortController();
     setLoading(true);
+    setLoadedRouteId(null);
     setError(null);
     getLibraryPart(id, controller.signal)
       .then((row) => {
         if (controller.signal.aborted) return;
         setPart(row);
+        setLoadedRouteId(id);
         setName(row.name);
         setNotes(row.notes ?? "");
       })
       .catch((err: Error) => {
         if (controller.signal.aborted) return;
         setPart(null);
+        setLoadedRouteId(null);
         setError(err.message || "加载零件失败");
       })
       .finally(() => {
@@ -70,6 +72,7 @@ export function LibraryDetail() {
       const updated = await updateLibraryPart(patchId, patchBody);
       if (!isCurrentMutation()) return;
       setPart(updated);
+      setLoadedRouteId(patchId);
       if (savesEditableFields) {
         setName(updated.name);
         setNotes(updated.notes ?? "");
@@ -82,7 +85,7 @@ export function LibraryDetail() {
     }
   }
 
-  if (loading) {
+  if (loading || (part !== null && loadedRouteId !== id)) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-6">
         <div className="card text-sm text-txt-secondary">加载中...</div>
@@ -153,6 +156,7 @@ export function LibraryDetail() {
                 id="part-name"
                 data-testid="part-name-input"
                 value={name}
+                disabled={saving}
                 onChange={(event) => setName(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-border bg-page px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent"
               />
@@ -165,6 +169,7 @@ export function LibraryDetail() {
                 id="part-notes"
                 data-testid="part-notes-input"
                 value={notes}
+                disabled={saving}
                 onChange={(event) => setNotes(event.target.value)}
                 rows={4}
                 className="mt-1 w-full resize-y rounded-lg border border-border bg-page px-3 py-2 text-sm text-txt-primary outline-none focus:border-accent"
