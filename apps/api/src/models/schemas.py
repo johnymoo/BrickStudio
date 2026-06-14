@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +308,13 @@ class LibraryPartUpdate(BaseModel):
     name: str | None = None
     notes: str | None = None
     status: Literal["pending", "verified", "rejected"] | None = None
+
+    @field_validator("name", "status")
+    @classmethod
+    def _reject_null_required_fields(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("field may be omitted but not null")
+        return value
 
 
 # ---------------------------------------------------------------------------
