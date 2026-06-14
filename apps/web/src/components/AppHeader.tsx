@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 const NAV_ITEMS: ReadonlyArray<{ path: string; label: string; testId?: string }> = [
   { path: "/", label: "我的积木" },
   { path: "/parametric", label: "建模", testId: "header-parametric-link" },
+  { path: "/library", label: "零件库", testId: "header-library-link" },
 ];
 
 export function AppHeader() {
