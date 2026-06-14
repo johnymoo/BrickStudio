@@ -3,6 +3,7 @@ import { JobList } from "@features/jobs/JobList";
 import { JobDetail } from "@features/jobs/JobDetail";
 import { ParametricPage } from "@features/parametric/ParametricPage";
 import { CaptureDetail } from "@features/captures/CaptureDetail";
+import { LibraryDetail } from "@features/library/LibraryDetail";
 import { LibraryList } from "@features/library/LibraryList";
 import { AppHeader } from "@components/AppHeader";
 import { InstallPrompt } from "@components/InstallPrompt";
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/" element={<JobList />} />
           <Route path="/parametric" element={<ParametricPage />} />
           <Route path="/library" element={<LibraryList />} />
+          <Route path="/library/:id" element={<LibraryDetail />} />
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/captures/:id" element={<CaptureDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
