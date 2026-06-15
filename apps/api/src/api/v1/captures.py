@@ -13,8 +13,8 @@ from app.deps import DBSessionDep
 from core.errors import CaptureInvalid, CaptureNotFound
 from db.models import Capture, Job
 from models.schemas import CaptureImagesRead, CaptureImageRead, CaptureRead, NeedsMeasurement
+from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
 from storage.minio_client import raw_object_key, storage
-from workers.tasks.reconstruct import reconstruct as reconstruct_task
 
 logger = logging.getLogger(__name__)
 
@@ -120,21 +120,17 @@ async def create_capture(
         stage="queued",
     )
     session.add(job)
-    await session.flush()  # populate job.id
 
-    # Dispatch — use the pre-created job's id as the task id hint.
-    async_result = reconstruct_task.apply_async(
-        args=[str(capture_id)],
-        task_id=str(job.id),
+    job_id = await commit_and_dispatch_reconstruct(
+        session,
+        capture_id=capture_id,
+        job=job,
     )
-    job.celery_task_id = async_result.id
-
-    await session.commit()
     await session.refresh(capture)
 
     logger.info(
         "captures.create: capture_id=%s part_id=%s images=%d mode=%s job_id=%s",
-        capture_id, part_id, len(keys), capture_mode, job.id,
+        capture_id, part_id, len(keys), capture_mode, job_id,
     )
 
     return CaptureRead(
@@ -144,7 +140,7 @@ async def create_capture(
         image_count=capture.image_count,
         created_at=capture.created_at,
         updated_at=capture.updated_at,
-        job_id=job.id,
+        job_id=job_id,
         image_keys=capture.image_keys,
         capture_mode=capture_mode,
     )

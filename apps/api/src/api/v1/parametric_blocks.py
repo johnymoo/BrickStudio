@@ -81,8 +81,8 @@ from app.deps import DBSessionDep
 from core.errors import CaptureInvalid
 from db.models import Capture, Job
 from models.schemas import ParametricBlockRead
+from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
 from storage.minio_client import raw_object_key, storage
-from workers.tasks.reconstruct import reconstruct as reconstruct_task
 
 logger = logging.getLogger(__name__)
 
@@ -332,15 +332,12 @@ async def create_parametric_block(
         stage="queued",
     )
     session.add(job)
-    await session.flush()  # populate job.id
 
-    async_result = reconstruct_task.apply_async(
-        args=[str(capture_id)],
-        task_id=str(job.id),
+    job_id = await commit_and_dispatch_reconstruct(
+        session,
+        capture_id=capture_id,
+        job=job,
     )
-    job.celery_task_id = async_result.id
-
-    await session.commit()
     await session.refresh(capture)
 
     logger.info(
@@ -354,7 +351,7 @@ async def create_parametric_block(
         units_y,
         len(keys),
         len(cross_warnings),
-        job.id,
+        job_id,
     )
 
     body = ParametricBlockRead(
@@ -369,7 +366,7 @@ async def create_parametric_block(
         raw_measurements_mm=raw,
         derived_spec_mm=derived,
         cross_check_warnings=cross_warnings,
-        job_id=job.id,
+        job_id=job_id,
         created_at=capture.created_at,
     )
     return JSONResponse(

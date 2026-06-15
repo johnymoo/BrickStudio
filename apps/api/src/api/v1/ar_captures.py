@@ -30,8 +30,8 @@ from core.errors import CaptureInvalid
 from db.models import Capture, Job
 from models.schemas import ArCaptureRead, NeedsMeasurement, RecognizedBlock
 from services.brick_recognizer import recognize_brick
+from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
 from storage.minio_client import raw_object_key, storage
-from workers.tasks.reconstruct import reconstruct as reconstruct_task
 
 logger = logging.getLogger(__name__)
 
@@ -187,10 +187,11 @@ async def create_ar_capture(
     if recognized:
         job = Job(capture_id=capture_id, kind="reconstruct", status="pending", progress=0, stage="queued")
         session.add(job)
-        await session.flush()  # populate job.id
-        async_result = reconstruct_task.apply_async(args=[str(capture_id)], task_id=str(job.id))
-        job.celery_task_id = async_result.id
-        job_id = job.id
+        job_id = await commit_and_dispatch_reconstruct(
+            session,
+            capture_id=capture_id,
+            job=job,
+        )
 
     await session.commit()
     await session.refresh(capture)
