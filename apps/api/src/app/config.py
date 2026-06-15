@@ -95,6 +95,21 @@ class Settings(BaseSettings):
         ),
     )
     s3_secure: bool = Field(default=False, description="Use https for S3 client.")
+    max_upload_file_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        ge=1,
+        description="Maximum bytes accepted for one uploaded image-like file.",
+    )
+    max_upload_total_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        ge=1,
+        description="Maximum total uploaded bytes accepted for one request.",
+    )
+    max_image_pixels: int = Field(
+        default=20_000_000,
+        ge=1,
+        description="Pillow decompression guard for uploaded images.",
+    )
 
     # ---- API ---------------------------------------------------------------
     api_prefix: str = Field(default="/api/v1", description="URL prefix for all v1 routes.")

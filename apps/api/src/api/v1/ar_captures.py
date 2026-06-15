@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.deps import DBSessionDep
+from api.v1.upload_limits import assert_total_upload_bytes, read_upload_bytes, validate_image_bytes
 from core.errors import CaptureInvalid
 from db.models import Capture, Job
 from models.schemas import ArCaptureRead, NeedsMeasurement, RecognizedBlock
@@ -118,14 +119,14 @@ async def create_ar_capture(
         raise CaptureInvalid("ar_metadata must be a JSON object", details={"got_type": type(meta).__name__})
 
     # ---- 3. Read recognition frame bytes --------------------------------
-    rgb_bytes = await recognition_rgb.read()
-    depth_bytes = await recognition_depth.read()
+    rgb_bytes = await read_upload_bytes(recognition_rgb, label="recognition_rgb")
+    validate_image_bytes(rgb_bytes, label="recognition_rgb", content_type=recognition_rgb.content_type)
+    depth_bytes = await read_upload_bytes(recognition_depth, label="recognition_depth")
+    validate_image_bytes(depth_bytes, label="recognition_depth", content_type=recognition_depth.content_type)
     await recognition_rgb.close()
     await recognition_depth.close()
-    if not rgb_bytes:
-        raise CaptureInvalid("recognition_rgb is empty")
-    if not depth_bytes:
-        raise CaptureInvalid("recognition_depth is empty")
+    total_bytes = len(rgb_bytes) + len(depth_bytes)
+    assert_total_upload_bytes(total_bytes)
 
     # ---- 4. Recognize (synchronous, fast) -------------------------------
     result = recognize_brick(
@@ -156,9 +157,10 @@ async def create_ar_capture(
     keys: list[str] = []
     for idx, upload in enumerate(imgs):
         ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
-        body = await upload.read()
-        if not body:
-            raise CaptureInvalid(f"image #{idx} is empty", details={"index": idx})
+        body = await read_upload_bytes(upload, label=f"image #{idx}")
+        validate_image_bytes(body, label=f"image #{idx}", content_type=upload.content_type)
+        total_bytes += len(body)
+        assert_total_upload_bytes(total_bytes)
         key = raw_object_key(str(capture_id), f"{idx:03d}.{ext}")
         storage.put_object(_settings_s3_bucket_raw(), key, body, content_type=upload.content_type or "application/octet-stream")
         keys.append(key)

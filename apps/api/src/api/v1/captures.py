@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from app.config import settings
 from app.deps import DBSessionDep
+from api.v1.upload_limits import assert_total_upload_bytes, read_upload_bytes, validate_image_bytes
 from core.errors import CaptureInvalid, CaptureNotFound
 from db.models import Capture, Job
 from models.schemas import CaptureImagesRead, CaptureImageRead, CaptureRead, NeedsMeasurement
@@ -82,15 +83,15 @@ async def create_capture(
 
     capture_id = uuid.uuid4()
     keys: list[str] = []
+    total_bytes = 0
     for idx, upload in enumerate(images):
         ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
         filename = f"{idx:03d}.{ext}"
         key = raw_object_key(str(capture_id), filename)
-        body = await upload.read()
-        if not body:
-            raise CaptureInvalid(
-                f"image #{idx} is empty", details={"index": idx, "filename": upload.filename}
-            )
+        body = await read_upload_bytes(upload, label=f"image #{idx}")
+        validate_image_bytes(body, label=f"image #{idx}", content_type=upload.content_type)
+        total_bytes += len(body)
+        assert_total_upload_bytes(total_bytes)
         storage.put_object(
             settings_s3_bucket_raw(),
             key,
