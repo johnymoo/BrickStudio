@@ -25,12 +25,14 @@ Validation tests cover:
 
 * Bad JSON in ``raw_measurements_mm`` → 422.
 * Missing 5 measurement keys → 422.
-* Non-numeric / non-positive measurement → 422.
+* Non-numeric / non-positive / non-finite measurement → 422.
+* Impossible geometry (outer <= inner, total height <= net height) → 422.
 * Unknown system / kind → 422 (FastAPI Literal coercion).
 * ``units_x=0`` or ``units_x=17`` → 422.
 * 21 photos → 422.
-* Cross-check warning path: 1A < 1B → 200 with ``cross_check_warnings``
-  non-empty (worker still runs, just flags the suspicious numbers).
+* Cross-check warning path: stud diameter mismatch → 201 with
+  ``cross_check_warnings`` non-empty (worker still runs, just flags the
+  suspicious numbers).
 """
 
 from __future__ import annotations
@@ -371,8 +373,25 @@ async def test_create_parametric_block_rejects_non_finite_measurement(
 
     assert resp.status_code == 422, resp.text
     body = resp.json()
-    if "error" in body:
-        assert body["error"]["code"] == "CAPTURE_INVALID"
+    assert body["error"]["code"] == "CAPTURE_INVALID"
+    assert body["error"]["details"]["key"] == "stud_diameter_mm"
+    assert body["error"]["details"]["value"] == "inf"
+
+
+async def test_create_parametric_block_rejects_nan_measurement(
+    app_client: AsyncIterator,
+) -> None:
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, stud_diameter_mm=float("nan"))
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
+    assert body["error"]["details"]["key"] == "stud_diameter_mm"
+    assert body["error"]["details"]["value"] == "nan"
 
 
 async def test_create_parametric_block_rejects_negative_knob_height(
@@ -386,8 +405,21 @@ async def test_create_parametric_block_rejects_negative_knob_height(
 
     assert resp.status_code == 422, resp.text
     body = resp.json()
-    if "error" in body:
-        assert body["error"]["code"] == "CAPTURE_INVALID"
+    assert body["error"]["code"] == "CAPTURE_INVALID"
+
+
+async def test_create_parametric_block_rejects_equivalent_knob_height(
+    app_client: AsyncIterator,
+) -> None:
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, brick_height_total_mm=17.0, brick_height_net_mm=17.0)
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
 async def test_create_parametric_block_rejects_absurd_measurement(
