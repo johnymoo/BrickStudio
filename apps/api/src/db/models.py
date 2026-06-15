@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -140,7 +140,10 @@ class Asset(Base):
     """A blob in S3 produced by a job (mesh, point cloud, texture, ...)."""
 
     __tablename__ = "assets"
-    __table_args__ = (Index("ix_assets_job_id", "job_id"),)
+    __table_args__ = (
+        Index("ix_assets_job_id", "job_id"),
+        UniqueConstraint("job_id", "kind", name="uq_assets_job_id_kind"),
+    )
 
     id: Mapped[UUID] = make_uuid_pk()
     job_id: Mapped[UUID] = mapped_column(

@@ -385,7 +385,7 @@ def test_ar_capture_end_to_end(work_in_tmp: Path, app_client) -> None:
     """POST a recognized FEILE 2x4 bundle -> run the worker in-process ->
     assert a canonical GLB asset with pipeline_used == 'ar_recognized'."""
     from app.config import settings
-    from db.models import Asset, Job
+    from db.models import Asset, Job, Part
     from db.session import async_session_factory
     from workers.tasks.reconstruct import reconstruct
 
@@ -406,7 +406,7 @@ def test_ar_capture_end_to_end(work_in_tmp: Path, app_client) -> None:
     result = reconstruct.apply(args=[capture_id])
     assert result.successful() or result.state == "SUCCESS", result.state
 
-    async def _state() -> tuple[Job | None, list[Asset]]:
+    async def _state() -> tuple[Job | None, list[Asset], Part | None]:
         f = async_session_factory()
         async with f() as session:
             from sqlalchemy import select
@@ -414,9 +414,12 @@ def test_ar_capture_end_to_end(work_in_tmp: Path, app_client) -> None:
 
             stmt = select(Job).where(Job.id == uuid.UUID(job_id)).options(selectinload(Job.assets))
             job = (await session.execute(stmt)).scalar_one_or_none()
-            return job, list(job.assets) if job else []
+            part = (
+                await session.scalars(select(Part).where(Part.capture_id == uuid.UUID(capture_id)))
+            ).one_or_none()
+            return job, list(job.assets) if job else [], part
 
-    job, assets = asyncio.run(_state())
+    job, assets, part = asyncio.run(_state())
     assert job is not None and job.status == "completed", job
     assert len(assets) == 1
     meta_out = assets[0].meta
@@ -427,6 +430,9 @@ def test_ar_capture_end_to_end(work_in_tmp: Path, app_client) -> None:
     # FEILE 2x4: bbox_max.x = 16mm, bbox_max.y = 32mm.
     assert abs(meta_out["bbox_max"][0] - 16.0) < 0.5, meta_out["bbox_max"]
     assert abs(meta_out["bbox_max"][1] - 32.0) < 0.5, meta_out["bbox_max"]
+    assert part is not None
+    assert part.source_mode == "ar_recognized"
+    assert part.asset_id == assets[0].id
 
     # GLB is a real binary glTF in MinIO.
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:

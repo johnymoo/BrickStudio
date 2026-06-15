@@ -838,6 +838,64 @@ def test_parametric_capture_auto_promotes_to_part(
     assert part.asset_id == assets[0].id
 
 
+def test_parametric_rerun_keeps_job_asset_and_part_consistent(
+    work_in_tmp: Path,
+    app_client: AsyncIterator,
+) -> None:
+    from db.models import Asset, Job, Part
+    from db.session import async_session_factory
+    from workers.tasks.reconstruct import reconstruct
+
+    resp = asyncio.get_event_loop().run_until_complete(
+        app_client.post(
+            "/api/v1/parametric-blocks",
+            data={
+                "part_id": "rerun-feile-2x2",
+                "system": "feile",
+                "kind": "brick",
+                "units_x": "2",
+                "units_y": "2",
+                "raw_measurements_mm": (
+                    '{"outer_pitch_mm":33.4,"inner_pitch_mm":6.6,'
+                    '"stud_diameter_mm":9.4,"brick_height_net_mm":19.2,'
+                    '"brick_height_total_mm":24.6}'
+                ),
+            },
+        )
+    )
+    assert resp.status_code == 201, resp.text
+    capture_id = resp.json()["capture_id"]
+    job_id = resp.json()["job_id"]
+
+    first = reconstruct.apply(args=[capture_id])
+    assert first.successful() or first.state == "SUCCESS", first.state
+    second = reconstruct.apply(args=[capture_id])
+    assert second.successful() or second.state == "SUCCESS", second.state
+
+    async def _load() -> tuple[Job | None, list[Asset], Part | None]:
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        f = async_session_factory()
+        async with f() as session:
+            job = (
+                await session.execute(
+                    select(Job).where(Job.id == uuid.UUID(job_id)).options(selectinload(Job.assets))
+                )
+            ).scalar_one_or_none()
+            assets = list(job.assets) if job else []
+            part = (
+                await session.scalars(select(Part).where(Part.capture_id == uuid.UUID(capture_id)))
+            ).one_or_none()
+            return job, assets, part
+
+    job, assets, part = asyncio.run(_load())
+    assert job is not None
+    assert len(assets) == 1
+    assert part is not None
+    assert part.asset_id == assets[0].id
+
+
 def _strip_scheme(url: str) -> str:
     """``http://host:port`` -> ``host:port`` (minio client expects no scheme)."""
     return url.split("://", 1)[-1] if "://" in url else url

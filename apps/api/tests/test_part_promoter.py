@@ -147,7 +147,9 @@ async def test_promote_is_idempotent_and_preserves_user_edits() -> None:
         capture.units_x = 3
         capture.units_y = 6
         capture.derived_spec_mm = {"unit_mm": 16.0, "height_mm": 6.4}
-        job = (await session.scalars(select(Job).where(Job.capture_id == capture_id))).first()
+        job = Job(capture_id=capture_id, kind="reconstruct", status="completed", progress=100)
+        session.add(job)
+        await session.flush()
         session.add(Asset(id=new_asset_id, job_id=job.id, kind="mesh_gltf", storage_key="recon/x/mesh.glb"))
         await session.commit()
     await promote_capture_to_part(capture_id, new_asset_id)

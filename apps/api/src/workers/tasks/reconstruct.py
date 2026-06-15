@@ -65,6 +65,7 @@ from typing import Any
 
 import redis
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 
 from app.config import settings
 from db.models import Asset, Capture, Job
@@ -78,6 +79,7 @@ from pipelines.colmap_runner import (
 )
 from pipelines.open3d_runner import Open3DRunner
 from services.block_generator import BlockSpec, export_glb
+from services.part_promoter import upsert_part_for_capture
 from storage.minio_client import recon_object_key, storage
 from workers.celery_app import celery_app
 
@@ -629,40 +631,44 @@ def _finalize_mesh_pipeline(
         for k, v in extra_meta.items():
             meta.setdefault(k, v)
 
-    asset_id = uuid.uuid4()
+    requested_asset_id = uuid.uuid4()
 
-    async def _write_asset() -> None:
+    async def _write_asset_and_part() -> uuid.UUID:
         f = async_session_factory()
         async with f() as session:
-            session.add(
-                Asset(
-                    id=asset_id,
-                    job_id=job_id,
-                    kind="mesh_gltf",
-                    storage_key=storage_key,
-                    size_bytes=size_bytes,
-                    meta=meta,
-                )
+            stmt = insert(Asset).values(
+                id=requested_asset_id,
+                job_id=job_id,
+                kind="mesh_gltf",
+                storage_key=storage_key,
+                size_bytes=size_bytes,
+                meta=meta,
             )
+            result = await session.execute(
+                stmt.on_conflict_do_update(
+                    constraint="uq_assets_job_id_kind",
+                    set_={
+                        "storage_key": stmt.excluded.storage_key,
+                        "size_bytes": stmt.excluded.size_bytes,
+                        "meta": stmt.excluded.meta,
+                    },
+                ).returning(Asset.id)
+            )
+            asset_id = result.scalar_one()
+            await upsert_part_for_capture(session, capture_id=capture_uuid, asset_id=asset_id)
             await session.commit()
+            return asset_id
 
-    asyncio.run(_write_asset())
-
-    # ---- Auto-promote into the reusable library (issue #5, best-effort) --
-    # The GLB is already persisted as an asset; promotion is an additive
-    # post-completion action. If it fails we log and continue -- we must NOT
-    # turn a successful reconstruction into a failed job. A worker re-run
-    # upserts idempotently on capture_id.
     try:
-        from services.part_promoter import promote_capture_to_part
-
-        asyncio.run(promote_capture_to_part(capture_uuid, asset_id))
-    except Exception as exc:  # noqa: BLE001 -- best-effort by design
-        logger.warning(
-            "reconstruct: auto-promote to part failed for capture %s: %s",
+        asset_id = _run_async(_write_asset_and_part())
+    except Exception:
+        logger.exception(
+            "reconstruct: asset/part finalization failed capture_id=%s job_id=%s storage_key=%s",
             capture_uuid,
-            exc,
+            job_id,
+            storage_key,
         )
+        raise
 
     # ---- Stage 6: final progress + completed event ----------------------
     _emit_progress(self, job_id, progress=100, stage="completed", eta_seconds=0)
