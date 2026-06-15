@@ -10,8 +10,10 @@ from dataclasses import dataclass
 
 import pytest
 from fixtures.synth_studs import make_ar_bundle
+
 from db.models import Capture, Job
 from db.session import async_session_factory
+from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
 
 
 @dataclass(frozen=True)
@@ -123,3 +125,38 @@ async def test_recognized_ar_capture_commits_before_dispatch(app_client: AsyncIt
     body = resp.json()
     assert body["status"] == "recognized"
     assert visible_dispatch == [(body["capture_id"], body["job_id"])]
+
+
+async def test_dispatch_failure_marks_committed_job_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    capture_id = uuid.uuid4()
+
+    def fail_apply_async(*, args: list[str], task_id: str) -> None:
+        raise RuntimeError("broker unavailable")
+
+    monkeypatch.setattr("services.reconstruct_dispatcher.reconstruct_task.apply_async", fail_apply_async)
+
+    factory = async_session_factory()
+    async with factory() as session:
+        capture = Capture(
+            id=capture_id,
+            part_id="dispatch-fails",
+            status="pending",
+            image_count=0,
+            image_keys=[],
+        )
+        job = Job(capture_id=capture_id, kind="reconstruct", status="pending", progress=0, stage="queued")
+        session.add_all([capture, job])
+
+        with pytest.raises(RuntimeError, match="broker unavailable"):
+            await commit_and_dispatch_reconstruct(session, capture_id=capture_id, job=job)
+
+        job_id = job.id
+
+    async with factory() as session:
+        committed_job = await session.get(Job, job_id)
+        assert committed_job is not None
+        assert committed_job.status == "failed"
+        assert committed_job.stage == "failed"
+        assert committed_job.celery_task_id is None
+        assert committed_job.error is not None
+        assert "broker unavailable" in committed_job.error

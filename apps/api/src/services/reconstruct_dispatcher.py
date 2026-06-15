@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,10 +27,19 @@ async def commit_and_dispatch_reconstruct(
     job_id = job.id
     await session.commit()
 
-    async_result = reconstruct_task.apply_async(
-        args=[str(capture_id)],
-        task_id=str(job_id),
-    )
+    try:
+        async_result = reconstruct_task.apply_async(
+            args=[str(capture_id)],
+            task_id=str(job_id),
+        )
+    except Exception as exc:
+        job.status = "failed"
+        job.stage = "failed"
+        job.error = f"failed to enqueue reconstruct task: {exc}"
+        job.finished_at = datetime.now(UTC)
+        await session.commit()
+        raise
+
     job.celery_task_id = async_result.id
     await session.commit()
     return job_id
