@@ -199,3 +199,16 @@ def test_root_s3_proxy_handles_browser_cors_and_preflight() -> None:
     assert 'header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Amz-Date, X-Amz-Content-Sha256, X-Amz-Security-Token"' in s3_block
     assert 'header Access-Control-Max-Age "3600"' in s3_block
     assert 'respond "" 204' in s3_block
+
+
+def test_api_preflight_allows_library_admin_token_header() -> None:
+    caddyfile = _read("deploy/Caddyfile")
+    api_block = caddyfile.split("(app_routes) {", 1)[1].split("# Health endpoint", 1)[0]
+
+    assert "@cors_preflight method OPTIONS" in api_block
+    assert "handle @cors_preflight" in api_block
+    assert 'header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"' in api_block
+    assert (
+        'header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Library-Admin-Token"'
+        in api_block
+    )
