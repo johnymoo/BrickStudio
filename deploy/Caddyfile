@@ -62,8 +62,21 @@
 	log
 }
 
-:{$S3_PROXY_PORT:9000} {
-	reverse_proxy minio:9000
+:9000 {
+	@s3_cors_preflight method OPTIONS
+	handle @s3_cors_preflight {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, HEAD, PUT, POST, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With, X-Amz-Date, X-Amz-Content-Sha256, X-Amz-Security-Token"
+		header Access-Control-Max-Age "3600"
+		respond "" 204
+	}
+
+	handle {
+		reverse_proxy minio:9000
+	}
+
+	header Access-Control-Allow-Origin "*"
 
 	encode zstd gzip
 	log
