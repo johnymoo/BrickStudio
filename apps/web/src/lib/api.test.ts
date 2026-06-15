@@ -403,6 +403,49 @@ describe("library api", () => {
 
     expect(observedToken).toBe("test-token");
   });
+
+  it("treats blocked library admin token storage as no token", async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new Error("storage blocked");
+      },
+    });
+    let observedToken: string | null = "not observed";
+    server.use(
+      http.patch("*/api/v1/library/p1", async ({ request }) => {
+        observedToken = request.headers.get("X-Library-Admin-Token");
+        return HttpResponse.json({
+          part_id: "p1",
+          capture_id: "c1",
+          asset_id: "a1",
+          source_mode: "parametric_block",
+          system: "feile",
+          kind: "brick",
+          units_x: 2,
+          units_y: 2,
+          derived_spec_mm: null,
+          color: null,
+          name: "renamed",
+          notes: null,
+          status: "verified",
+          created_at: "<PRIVATE_DATE>",
+          updated_at: "<PRIVATE_DATE>",
+        });
+      }),
+    );
+
+    try {
+      await updateLibraryPart("p1", { name: "renamed", status: "verified" });
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(window, "localStorage", descriptor);
+      }
+    }
+
+    expect(observedToken).toBeNull();
+  });
 });
 
 describe("subscribeJob", () => {

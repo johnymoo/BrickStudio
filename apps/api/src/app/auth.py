@@ -1,6 +1,7 @@
 """Small auth dependencies used before full user accounts exist."""
 from __future__ import annotations
 
+import secrets
 from typing import Annotated
 
 from fastapi import Header, HTTPException, status
@@ -19,7 +20,9 @@ async def require_library_admin(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="library admin token is not configured",
         )
-    if x_library_admin_token != expected:
+    if x_library_admin_token is None or not secrets.compare_digest(
+        x_library_admin_token, expected
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="library admin token required",

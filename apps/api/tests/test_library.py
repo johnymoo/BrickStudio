@@ -132,6 +132,34 @@ async def test_patch_library_part_requires_admin_token(app_client, library_admin
     assert resp.status_code == 401, resp.text
 
 
+async def test_patch_library_part_rejects_wrong_admin_token(
+    app_client, library_admin_token: str
+) -> None:
+    part_id = await _make_part(name="before")
+
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": f"{library_admin_token}-wrong"},
+        json={"name": "after"},
+    )
+
+    assert resp.status_code == 401, resp.text
+
+
+async def test_patch_library_part_returns_503_when_admin_token_unconfigured(
+    app_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("app.auth.settings", SimpleNamespace(library_admin_token=None))
+    part_id = await _make_part(name="before")
+
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        json={"name": "after"},
+    )
+
+    assert resp.status_code == 503, resp.text
+
+
 async def test_patch_library_part_updates_fields(app_client, library_admin_token: str) -> None:
     part_id = await _make_part(name="before")
     resp = await app_client.patch(

@@ -248,8 +248,12 @@ export async function getLibraryPart(id: string, signal?: AbortSignal): Promise<
 
 function getLibraryAdminToken(): string | null {
   if (typeof window === "undefined") return null;
-  const token = window.localStorage.getItem("blocktool.libraryAdminToken");
-  return token && token.trim() ? token.trim() : null;
+  try {
+    const token = window.localStorage.getItem("blocktool.libraryAdminToken");
+    return token && token.trim() ? token.trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function updateLibraryPart(

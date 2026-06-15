@@ -46,9 +46,9 @@ async def get_part(part_id: uuid.UUID, session: DBSessionDep) -> LibraryPartRead
 @router.patch("/{part_id}", response_model=LibraryPartRead, summary="Update a library part")
 async def update_part(
     part_id: uuid.UUID,
+    _: Annotated[None, Depends(require_library_admin)],
     payload: LibraryPartUpdate,
     session: DBSessionDep,
-    _: Annotated[None, Depends(require_library_admin)],
 ) -> LibraryPartRead:
     part = await session.get(Part, part_id)
     if part is None:
