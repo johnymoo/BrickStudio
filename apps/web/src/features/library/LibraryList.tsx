@@ -16,22 +16,27 @@ export function LibraryList() {
   const [tab, setTab] = useState<PartStatus>("pending");
   const [parts, setParts] = useState<LibraryPart[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadSeq, setReloadSeq] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    setError(null);
     listLibraryParts(tab, 50, controller.signal)
       .then((rows) => {
         if (!controller.signal.aborted) setParts(rows);
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setParts([]);
+      .catch((err: Error) => {
+        if (controller.signal.aborted) return;
+        setParts([]);
+        setError(err.message || "无法连接零件库 API");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [tab]);
+  }, [tab, reloadSeq]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -59,6 +64,14 @@ export function LibraryList() {
 
       {loading ? (
         <div className="card text-sm text-txt-secondary">加载中...</div>
+      ) : error ? (
+        <div className="card flex flex-col items-center gap-3 py-16 text-center">
+          <h2 className="text-base font-medium text-txt-primary">零件库加载失败</h2>
+          <p className="text-sm text-txt-secondary">{error}</p>
+          <button type="button" className="btn-outline text-sm" onClick={() => setReloadSeq((value) => value + 1)}>
+            重试
+          </button>
+        </div>
       ) : parts.length === 0 ? (
         <div className="card flex flex-col items-center gap-2 py-16 text-center">
           <h2 className="text-base font-medium text-txt-primary">这里还没有零件</h2>

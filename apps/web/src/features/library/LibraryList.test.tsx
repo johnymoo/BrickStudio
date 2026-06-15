@@ -63,6 +63,19 @@ describe("LibraryList", () => {
     expect(screen.getByText("beta")).toBeInTheDocument();
   });
 
+  it("renders an API error instead of the empty state", async () => {
+    listMock.mockRejectedValue(new Error("network down"));
+    render(
+      <MemoryRouter>
+        <LibraryList />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText("零件库加载失败")).toBeInTheDocument());
+    expect(screen.getByText("network down")).toBeInTheDocument();
+    expect(screen.queryByText("这里还没有零件")).not.toBeInTheDocument();
+  });
+
   it("defaults to the pending tab and loads rejected only on its own tab", async () => {
     // Each tab filters by exactly one status (server-side). Default = pending.
     listMock.mockImplementation(async (status?: string) => {

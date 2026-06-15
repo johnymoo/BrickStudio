@@ -47,21 +47,19 @@ export function Viewer({ assetId, className, style, background = "var(--camera-b
   const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     setUrl(null);
     setError(null);
-    getAssetUrl(assetId)
+    getAssetUrl(assetId, controller.signal)
       .then((info) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setUrl(info.url);
       })
       .catch((err: Error) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         setError(err.message);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [assetId]);
 
   useEffect(() => {
