@@ -143,8 +143,16 @@
 - 出参: `201 { capture_id, part_id, image_count, status: "pending" }`
 - 行为: 保存原图到 MinIO, 写 `captures` 表, 调度 Celery 任务
 
+`GET /api/v1/captures?limit=20`
+- 出参: `CaptureRead[]`, 最近采集按 `created_at desc` 排序
+- 用途: 首页展示后端已有采集, 尤其是 AR 识别失败后的 `needs_measurement` 项
+
 `GET /api/v1/captures/{capture_id}`
-- 出参: `{ capture_id, part_id, status, image_count, created_at, job_id? }`
+- 出参: `{ capture_id, part_id, status, image_count, created_at, updated_at, job_id?, image_keys, capture_mode, mode, system?, kind?, units_x?, units_y?, recognition_result?, needs_measurement? }`
+
+`GET /api/v1/captures/{capture_id}/images`
+- 出参: `{ capture_id, images: [{ key, url, expires_at? }] }`
+- 只为该 capture 的 `image_keys` 生成原图预签名 URL, 用于采集详情页查看上传照片
 
 ### 6.2 任务 (重建)
 
@@ -162,8 +170,11 @@
 
 ### 6.3 资源 (下载重建产物)
 
-`GET /api/v1/assets/{asset_id}` (重定向到 MinIO 预签名 URL)
-- 出参: `{ asset_id, kind: "mesh_gltf|mesh_obj|mesh_stl|point_cloud_ply", url, expires_at }`
+`GET /api/v1/assets/{asset_id}`
+- 普通浏览器/下载调用: `302 Location: <MinIO presigned URL>`
+- SPA / SDK 调用: 请求头含 `Accept: application/json` 时返回 `200` JSON
+- JSON 出参: `{ asset_id, job_id, kind: "mesh_gltf|mesh_obj|mesh_stl|point_cloud_ply", url, size_bytes?, meta?, expires_at }`
+- 预签名 URL 必须用浏览器可达的 S3 API 根地址签名 (`S3_PUBLIC_ENDPOINT`), 不能先签内部 host 再改写
 
 ### 6.4 健康
 
@@ -180,6 +191,17 @@
 | status | VARCHAR(32) | NOT NULL, DEFAULT 'pending' |
 | image_count | INT | NOT NULL |
 | image_keys | JSONB | NOT NULL, MinIO 对象 key 列表 |
+| capture_mode | VARCHAR(32) | NOT NULL, DEFAULT 'phone_walkaround' |
+| mode | VARCHAR(32) | NOT NULL, DEFAULT 'photo'; `photo` / `parametric_block` / `ar_recognized` |
+| system | VARCHAR(32) | NULL |
+| kind | VARCHAR(32) | NULL |
+| units_x | INT | NULL |
+| units_y | INT | NULL |
+| raw_measurements_mm | JSONB | NULL, 参数化 5 个卡尺原始值 |
+| derived_spec_mm | JSONB | NULL, 参数化/AR 推导规格 |
+| cross_check_warnings | JSONB | NULL |
+| ar_metadata | JSONB | NULL, ARCore 上传元数据 |
+| recognition_result | JSONB | NULL, AR 识别结果与失败原因 |
 | created_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
 | updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT now() |
 

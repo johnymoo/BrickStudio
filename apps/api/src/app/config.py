@@ -95,6 +95,21 @@ class Settings(BaseSettings):
         ),
     )
     s3_secure: bool = Field(default=False, description="Use https for S3 client.")
+    max_upload_file_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        ge=1,
+        description="Maximum bytes accepted for one uploaded image-like file.",
+    )
+    max_upload_total_bytes: int = Field(
+        default=50 * 1024 * 1024,
+        ge=1,
+        description="Maximum total uploaded bytes accepted for one request.",
+    )
+    max_image_pixels: int = Field(
+        default=20_000_000,
+        ge=1,
+        description="Pillow decompression guard for uploaded images.",
+    )
 
     # ---- API ---------------------------------------------------------------
     api_prefix: str = Field(default="/api/v1", description="URL prefix for all v1 routes.")
@@ -104,6 +119,50 @@ class Settings(BaseSettings):
     )
     environment: Literal["dev", "test", "staging", "prod"] = "dev"
     log_level: str = "INFO"
+    library_admin_token: str | None = Field(
+        default=None,
+        description="Bearer-like shared secret required for library mutation endpoints.",
+    )
+
+    # ---- 3D reconstruction (phase 2) ---------------------------------------
+    colmap_bin: str | None = Field(
+        default=None,
+        description=(
+            "Override path to the COLMAP binary. When unset, the worker "
+            "falls back to `shutil.which('colmap')` and finally to the "
+            "Open3D multi-photo fallback."
+        ),
+    )
+    reconstruct_min_images_for_colmap: int = Field(
+        default=8,
+        ge=4,
+        description=(
+            "Minimum number of photos required to take the COLMAP path. "
+            "Below this we use the Open3D 4-7 photo fallback (synthetic "
+            "icosahedron). 8 is the design-phase2 default."
+        ),
+    )
+
+    # ---- AR capture recognition (v0.5) -------------------------------------
+    ar_pitch_tolerance_mm: float = Field(
+        default=3.0,
+        gt=0,
+        description=(
+            "Max |measured pitch − canonical unit| (mm) for a system "
+            "classification to count. LEGO 8 / FEILE 16 / DUPLO 20 are "
+            "≥4mm apart, so 3mm absorbs AR depth noise without aliasing."
+        ),
+    )
+    ar_min_confidence: float = Field(
+        default=0.6,
+        ge=0,
+        le=1,
+        description=(
+            "Min recognizer confidence (0..1, = 1 − Δ/tolerance) to take "
+            "the zero-measurement path. Below this the endpoint returns "
+            "needs_measurement and the client falls back to /parametric-blocks."
+        ),
+    )
 
     # ---- Celery ------------------------------------------------------------
     celery_broker_url: str | None = Field(

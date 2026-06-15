@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 1020" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif">
+  <defs>
+    <marker id="arrow-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0f172a"/>
+    </marker>
+    <marker id="arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 10 0 L 0 5 L 10 10 z" fill="#0f172a"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="550" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">
+    卡尺测量示意 — 5 个原始测量 → 推导 4 个 spec
+  </text>
+  <text x="550" y="54" text-anchor="middle" font-size="12" fill="#64748b">
+    卡尺只卡"外/内边/总长"等可直接卡的位置, 中心距用 (1A+1B)/2 反算 (stud 直径误差互消)
+  </text>
+
+  <!-- ============== Subplot 1: 顶视 (1A, 1B, ③) ============== -->
+  <rect x="40" y="80" width="500" height="380" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="290" y="105" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">顶视 (1A, 1B, ③)</text>
+
+  <!-- Brick 40x40 mm, scale 5 px/mm, center (290, 280). Range x 190-390, y 180-380 -->
+  <rect x="190" y="180" width="200" height="200" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- 4 studs, center (±10,±10) mm = (±50, ±50) px from (290,280) -->
+  <circle cx="240" cy="230" r="40" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <circle cx="340" cy="230" r="40" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <circle cx="240" cy="330" r="40" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <circle cx="340" cy="330" r="40" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+
+  <!-- 1A 外径距: brick 总长, 跨 stud 1 圆周最左 → stud 2 圆周最右 (180px = 36mm) -->
+  <line x1="200" y1="218" x2="380" y2="218" stroke="#0f172a" stroke-width="1.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="290" y="212" text-anchor="middle" font-size="10" fill="#0f172a">36.0</text>
+  <text x="290" y="200" text-anchor="middle" font-size="9" fill="#475569">= 20.0 + 16.0</text>
+  <line x1="290" y1="148" x2="290" y2="215" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="290" cy="135" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="290" y="140" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1A</text>
+
+  <!-- 1B 内径距: 两 stud 之间空隙 (20px = 4mm) -->
+  <line x1="280" y1="245" x2="300" y2="245" stroke="#0f172a" stroke-width="1.2" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="290" y="263" text-anchor="middle" font-size="10" fill="#0f172a">4.0</text>
+  <text x="290" y="275" text-anchor="middle" font-size="9" fill="#475569">= 20.0 - 16.0</text>
+  <line x1="290" y1="296" x2="290" y2="278" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="290" cy="310" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="290" y="315" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1B</text>
+
+  <!-- ③ stud_diameter: 跨 stud 2 (右下) 直径, 避免跟 1A 数字箭头重叠 -->
+  <line x1="300" y1="330" x2="380" y2="330" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="340" y="324" text-anchor="middle" font-size="10" fill="#0f172a">Ø16.0</text>
+  <line x1="455" y1="370" x2="382" y2="335" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="468" cy="375" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="468" y="380" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">3</text>
+
+  <!-- Subplot 1 caption -->
+  <text x="290" y="425" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">1A: 卡尺从 brick 最左 → 最右 (跨两端 stud 圆周)</text>
+  <text x="290" y="441" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">1B: 卡尺**插入**两 stud 之间, 卡两 stud 圆周最近点 (4mm 空隙, 0.05 卡尺量程内)</text>
+
+  <!-- ============== Subplot 2: 前视 (②, ④) ============== -->
+  <rect x="560" y="80" width="500" height="380" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="810" y="105" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">前视 (② 净高, ④ 总高)</text>
+
+  <!-- Brick 40x17, scale 5 px/mm, center (810, 280). Range x 710-910, y 237-323 -->
+  <rect x="710" y="237" width="200" height="86" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.5"/>
+  <!-- 2 stud top arcs: stud center (760, 167) and (860, 167), radius 40, top half visible -->
+  <path d="M 760 127 A 40 40 0 0 1 800 167 L 720 167 A 40 40 0 0 1 760 127 Z"
+        fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <path d="M 860 127 A 40 40 0 0 1 900 167 L 820 167 A 40 40 0 0 1 860 127 Z"
+        fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <rect x="710" y="237" width="200" height="14" fill="#dbeafe"/>
+  <line x1="710" y1="237" x2="910" y2="237" stroke="#1e3a8a" stroke-width="1.5"/>
+
+  <!-- ② brick_height_net: 砖块净高 (底面 → 砖顶), 17.0 -->
+  <line x1="685" y1="237" x2="685" y2="323" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="680" y="284" text-anchor="end" font-size="10" fill="#0f172a">17.0</text>
+  <line x1="648" y1="280" x2="682" y2="280" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="635" cy="280" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="635" y="285" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2</text>
+
+  <!-- ④ brick_height_total: 砖块总高 (底面 → 凸点顶, 含凸点), 24.0 -->
+  <line x1="760" y1="237" x2="760" y2="127" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="775" y="190" font-size="10" fill="#0f172a">24.0</text>
+  <text x="775" y="202" font-size="9" fill="#475569">= 17.0 + 7.0</text>
+  <line x1="795" y1="180" x2="807" y2="180" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="820" cy="180" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="820" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">4</text>
+
+  <text x="810" y="380" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">②: 卡尺卡砖底 → 砖顶 (不含凸点)</text>
+  <text x="810" y="396" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">④: 卡尺卡砖底 → 凸点顶 (含凸点, 凸点高 = ④ - ②)</text>
+
+  <!-- ============== Subplot 3: 侧视 (② 互验) ============== -->
+  <rect x="40" y="480" width="500" height="380" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="290" y="505" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">侧视 (跟 ② ④ 互验, 应一致 ±0.1mm)</text>
+
+  <rect x="190" y="637" width="200" height="86" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.5"/>
+  <path d="M 240 527 A 40 40 0 0 1 280 567 L 200 567 A 40 40 0 0 1 240 527 Z"
+        fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <path d="M 340 527 A 40 40 0 0 1 380 567 L 300 567 A 40 40 0 0 1 340 527 Z"
+        fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <rect x="190" y="637" width="200" height="14" fill="#dbeafe"/>
+  <line x1="190" y1="637" x2="390" y2="637" stroke="#1e3a8a" stroke-width="1.5"/>
+
+  <!-- ② brick_height_net: same as subplot 2, left -->
+  <line x1="165" y1="637" x2="165" y2="723" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="160" y="684" text-anchor="end" font-size="10" fill="#0f172a">17.0</text>
+  <line x1="128" y1="680" x2="162" y2="680" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="115" cy="680" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="115" y="685" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2</text>
+
+  <!-- ④ brick_height_total: same -->
+  <line x1="240" y1="637" x2="240" y2="527" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="255" y="590" font-size="10" fill="#0f172a">24.0</text>
+  <line x1="275" y1="580" x2="287" y2="580" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="300" cy="580" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="300" y="585" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">4</text>
+
+  <text x="290" y="780" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">前/侧 ② 差 ≤ 0.1mm 算 OK, 差太大说明砖不平或卡尺没卡正</text>
+
+  <!-- ============== Subplot 4: iso 立体总览 ============== -->
+  <rect x="560" y="480" width="500" height="420" rx="8" fill="#fafafa" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="810" y="505" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">立体总览 (5 个原始测量在 3D 上的位置)</text>
+
+  <!-- iso brick: scale 3.5 px/mm, center (810, 720). -->
+  <polygon points="810,650 931.24,720 931.24,660.5 810,590.5" fill="#bfdbfe" stroke="#1e3a8a" stroke-width="1.2"/>
+  <polygon points="931.24,720 810,790 810,730.5 931.24,660.5" fill="#93c5fd" stroke="#1e3a8a" stroke-width="1.2"/>
+  <polygon points="810,590.5 931.24,660.5 810,730.5 688.76,660.5" fill="#dbeafe" stroke="#1e3a8a" stroke-width="1.2"/>
+
+  <ellipse cx="810" cy="613.25" rx="24" ry="14" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <ellipse cx="870.62" cy="648.25" rx="24" ry="14" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <ellipse cx="810" cy="683.25" rx="24" ry="14" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+  <ellipse cx="749.38" cy="683.25" rx="24" ry="14" fill="#fef3c7" stroke="#92400e" stroke-width="1.2"/>
+
+  <line x1="810" y1="590.5" x2="810" y2="650" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2 2"/>
+  <line x1="688.76" y1="660.5" x2="810" y2="650" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2 2"/>
+  <line x1="810" y1="730.5" x2="810" y2="790" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="2 2"/>
+
+  <!-- 1A 外径距 (top view 位置) — iso 顶面长边方向, stud 1 中心 → stud 2 中心 iso -->
+  <line x1="810" y1="613.25" x2="870.62" y2="648.25" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="850" y="628" font-size="10" fill="#0f172a">36.0</text>
+  <line x1="918" y1="555" x2="895" y2="588" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="928" cy="545" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="928" y="550" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1A</text>
+
+  <!-- 1B 内径距 — 两 stud 之间空隙, 短箭头在 stud 1 中心方向 -->
+  <line x1="810" y1="660" x2="810" y2="660" stroke="#0f172a" stroke-width="0"/>
+  <text x="810" y="668" text-anchor="middle" font-size="9" fill="#475569">4.0</text>
+  <line x1="775" y1="640" x2="775" y2="640" stroke="#0f172a" stroke-width="0"/>
+  <line x1="710" y1="640" x2="700" y2="640" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="687" cy="640" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="687" y="645" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">1B</text>
+
+  <!-- ② height: front-left edge of brick (iso 砖块前面左边), 17.0 -->
+  <line x1="810" y1="650" x2="810" y2="590.5" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="800" y="624" text-anchor="end" font-size="10" fill="#0f172a">17.0</text>
+  <line x1="745" y1="620" x2="765" y2="620" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="730" cy="620" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="730" y="625" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">2</text>
+
+  <!-- ③ stud_diameter: across stud 4 -->
+  <line x1="725" y1="683.25" x2="773" y2="683.25" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="708" y="703" text-anchor="end" font-size="10" fill="#0f172a">Ø16.0</text>
+  <line x1="660" y1="755" x2="710" y2="710" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="645" cy="765" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="645" y="770" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">3</text>
+
+  <!-- ④ brick_height_total: 砖块总高 (底面 → 凸点顶), 24.0. 跟 ② 同方向, 长度更长 -->
+  <line x1="810" y1="650" x2="810" y2="563.25" stroke="#0f172a" stroke-width="1" marker-start="url(#arrow-start)" marker-end="url(#arrow-end)"/>
+  <text x="822" y="610" font-size="10" fill="#0f172a">24.0</text>
+  <line x1="848" y1="600" x2="858" y2="600" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2"/>
+  <circle cx="873" cy="600" r="14" fill="#3b82f6" stroke="#1e3a8a" stroke-width="2"/>
+  <text x="873" y="605" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">4</text>
+
+  <text x="810" y="870" text-anchor="middle" font-size="11" fill="#475569" font-style="italic">iso 上 1B 因为空隙太小画不出箭头, 看顶视图 (subplot 1) 即可</text>
+
+  <!-- ============== Legend ============== -->
+  <rect x="40" y="910" width="1020" height="100" rx="8" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="60" y="932" font-size="12" font-weight="700" fill="#0f172a">报数格式 — 把 5 个数字发回来 (默认单位 mm):</text>
+
+  <g font-size="11" fill="#0f172a">
+    <circle cx="68" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="68" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">1A</text>
+    <text x="92" y="955" font-weight="600">outer_pitch</text>
+    <text x="92" y="970" fill="#475569">砖块总长 (跨两端 stud 圆周)</text>
+
+    <circle cx="268" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="268" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">1B</text>
+    <text x="292" y="955" font-weight="600">inner_pitch</text>
+    <text x="292" y="970" fill="#475569">两 stud 圆周之间空隙 (0.05 卡尺量程内)</text>
+
+    <circle cx="478" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="478" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">2</text>
+    <text x="497" y="955" font-weight="600">brick_height_net</text>
+    <text x="497" y="970" fill="#475569">砖块净高 (底面 → 砖顶, 不含凸点)</text>
+
+    <circle cx="688" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="688" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">3</text>
+    <text x="707" y="955" font-weight="600">stud_diameter</text>
+    <text x="707" y="970" fill="#475569">单个 stud 直径 (任选一个测外径)</text>
+
+    <circle cx="888" cy="958" r="11" fill="#3b82f6" stroke="#1e3a8a" stroke-width="1.5"/>
+    <text x="888" y="962" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">4</text>
+    <text x="907" y="955" font-weight="600">brick_height_total</text>
+    <text x="907" y="970" fill="#475569">砖块总高 (底面 → 凸点顶, 含凸点)</text>
+  </g>
+
+  <!-- Derivation note -->
+  <text x="60" y="1000" font-size="11" fill="#0f172a" font-weight="600">推导:</text>
+  <text x="100" y="1000" font-size="11" fill="#475569">unit = (1A + 1B) / 2  ·  stud_Ø = 3  ·  height = 2  ·  knob_h = 4 - 2</text>
+</svg>

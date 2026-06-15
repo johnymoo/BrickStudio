@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 720" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+    </marker>
+    <linearGradient id="grad-photo" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="100%" stop-color="#fde68a"/>
+    </linearGradient>
+    <linearGradient id="grad-spec" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#dbeafe"/>
+      <stop offset="100%" stop-color="#bfdbfe"/>
+    </linearGradient>
+    <linearGradient id="grad-glb" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#dcfce7"/>
+      <stop offset="100%" stop-color="#bbf7d0"/>
+    </linearGradient>
+    <linearGradient id="grad-compare" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fce7f3"/>
+      <stop offset="100%" stop-color="#fbcfe8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="460" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">实物采集 → spec 验证 (v0.3)</text>
+  <text x="460" y="54" text-anchor="middle" font-size="12" fill="#64748b">参数化建模路线: 照片只作 reference, 不作 SfM 数据源</text>
+
+  <!-- Step 1: 选积木 -->
+  <rect x="340" y="80" width="240" height="60" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+  <text x="460" y="106" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">1. 挑一块积木</text>
+  <text x="460" y="124" text-anchor="middle" font-size="11" fill="#475569">DUPLO 2x2 brick</text>
+
+  <!-- Arrow 1→2 -->
+  <line x1="460" y1="140" x2="460" y2="170" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 2: 卡尺量尺寸 -->
+  <rect x="300" y="170" width="320" height="80" rx="8" fill="url(#grad-spec)" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="460" y="196" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">2. 卡尺量 4 个关键尺寸</text>
+  <text x="460" y="216" text-anchor="middle" font-size="11" fill="#1e3a8a">凸点 Ø · 节距 · 砖块高 · 凸点高</text>
+  <text x="460" y="234" text-anchor="middle" font-size="10" font-style="italic" fill="#475569">(不能靠像素反推, 200w 像素下 20mm ≈ 30px)</text>
+
+  <!-- Arrow 2→ split -->
+  <line x1="460" y1="250" x2="460" y2="280" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="200" y1="280" x2="720" y2="280" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="200" y1="280" x2="200" y2="305" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="720" y1="280" x2="720" y2="305" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Left lane: GLB path -->
+  <text x="200" y="298" text-anchor="middle" font-size="11" font-weight="700" fill="#16a34a">↓ GLB 路径</text>
+  <text x="720" y="298" text-anchor="middle" font-size="11" font-weight="700" fill="#d97706">↓ 照片路径</text>
+
+  <!-- Step 3L: BlockSpec -->
+  <rect x="60" y="305" width="280" height="70" rx="8" fill="url(#grad-spec)" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="200" y="331" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">3. BlockSpec 设参</text>
+  <text x="200" y="349" text-anchor="middle" font-size="11" fill="#1e3a8a">kind=brick, system=duplo,</text>
+  <text x="200" y="365" text-anchor="middle" font-size="11" fill="#1e3a8a">units_x=2, units_y=2</text>
+
+  <!-- Arrow 3L→4L -->
+  <line x1="200" y1="375" x2="200" y2="400" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 4L: generate() -->
+  <rect x="60" y="400" width="280" height="80" rx="8" fill="url(#grad-glb)" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="200" y="426" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">4. generate() → export_glb()</text>
+  <text x="200" y="446" text-anchor="middle" font-size="11" fill="#14532d">trimesh 网格</text>
+  <text x="200" y="464" text-anchor="middle" font-size="11" fill="#14532d">→ /tmp/*.glb (5KB+ watertight)</text>
+
+  <!-- Right lane: Photo path -->
+  <!-- Step 3R: 拍照 -->
+  <rect x="580" y="305" width="280" height="70" rx="8" fill="url(#grad-photo)" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="720" y="331" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">3'. 拍 4-5 张 reference</text>
+  <text x="720" y="349" text-anchor="middle" font-size="11" fill="#78350f">顶视 1 + 侧视 3 (120° 间隔)</text>
+  <text x="720" y="365" text-anchor="middle" font-size="11" fill="#78350f">A4 白纸 + 自然光</text>
+
+  <!-- Arrow 3R→4R -->
+  <line x1="720" y1="375" x2="720" y2="400" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 4R: 上传 -->
+  <rect x="580" y="400" width="280" height="60" rx="8" fill="url(#grad-photo)" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="720" y="426" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">4'. 上传 MinIO</text>
+  <text x="720" y="446" text-anchor="middle" font-size="11" fill="#78350f">capture_id + part_id</text>
+
+  <!-- Arrow 4R→5R -->
+  <line x1="720" y1="460" x2="720" y2="490" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 5: 并排对比 -->
+  <rect x="200" y="490" width="520" height="100" rx="8" fill="url(#grad-compare)" stroke="#ec4899" stroke-width="2"/>
+  <text x="460" y="518" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">5. 并排渲染: 实拍图 vs GLB</text>
+  <text x="460" y="540" text-anchor="middle" font-size="11" fill="#831843">半透叠加 + 轮廓高亮</text>
+  <text x="460" y="558" text-anchor="middle" font-size="11" fill="#831843">偏差 ≤ 0.2mm → ✓ 通过</text>
+  <text x="460" y="576" text-anchor="middle" font-size="11" fill="#831843">偏差 &gt; 0.2mm → 改 BlockSpec 重做</text>
+
+  <!-- Arrow 4L→5 and 4R→5 -->
+  <line x1="200" y1="480" x2="200" y2="540" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <path d="M 200 540 Q 200 540 200 540" stroke="#475569" fill="none"/>
+  <line x1="720" y1="480" x2="720" y2="540" stroke="#475569" stroke-width="1.5" stroke-dasharray="4 3"/>
+
+  <!-- Arrow 5→6 -->
+  <line x1="460" y1="590" x2="460" y2="615" stroke="#475569" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Step 6: spec 写回 -->
+  <rect x="280" y="615" width="360" height="70" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+  <text x="460" y="641" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">6. spec 写回</text>
+  <text x="460" y="661" text-anchor="middle" font-size="11" fill="#475569">tests/e2e/fixtures/real-bricks/</text>
+  <text x="460" y="677" text-anchor="middle" font-size="11" fill="#475569">{kind}/{size}.json + 对比图 PNG</text>
+</svg>

@@ -14,7 +14,7 @@ import io
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import BinaryIO, Final
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from minio import Minio
 from minio.error import S3Error
@@ -30,13 +30,31 @@ class StorageClient:
     """Thin facade around the MinIO client used by the rest of the app."""
 
     def __init__(self, client: Minio | None = None) -> None:
-        self._client = client or Minio(
-            endpoint=_strip_scheme(settings.s3_endpoint),
-            access_key=settings.s3_access_key,
-            secret_key=settings.s3_secret_key,
-            secure=settings.s3_secure,
-            region=settings.s3_region,
-        )
+        owns_client = client is None
+        if client is None:
+            client = Minio(
+                endpoint=_strip_scheme(settings.s3_endpoint),
+                access_key=settings.s3_access_key,
+                secret_key=settings.s3_secret_key,
+                secure=settings.s3_secure,
+                region=settings.s3_region,
+            )
+        self._client = client
+        self._presign_client = self._client
+        public_endpoint = settings.s3_public_endpoint
+        if owns_client and public_endpoint:
+            _validate_presign_endpoint(public_endpoint)
+            if public_endpoint.rstrip("/") != settings.s3_endpoint.rstrip("/"):
+                endpoint, secure = _minio_endpoint_and_secure(
+                    public_endpoint, default_secure=settings.s3_secure
+                )
+                self._presign_client = Minio(
+                    endpoint=endpoint,
+                    access_key=settings.s3_access_key,
+                    secret_key=settings.s3_secret_key,
+                    secure=secure,
+                    region=settings.s3_region,
+                )
 
     # ---- Buckets ----------------------------------------------------------
     def ensure_bucket(self, bucket: str) -> None:
@@ -124,19 +142,9 @@ class StorageClient:
         expires_seconds: int = PRESIGNED_TTL_SECONDS,
     ) -> tuple[str, datetime]:
         """Return a presigned GET URL plus its expiry timestamp (UTC)."""
-        url = self._client.presigned_get_object(
+        url = self._presign_client.presigned_get_object(
             bucket, key, expires=timedelta(seconds=expires_seconds)
         )
-        # When the storage is reached through a Caddy / nginx proxy the
-        # internal endpoint isn't browser-reachable; rewrite the host if
-        # ``S3_PUBLIC_ENDPOINT`` is set.
-        public_base = settings.s3_public_base.rstrip("/")
-        if (
-            public_base
-            and settings.s3_endpoint
-            and public_base != settings.s3_endpoint.rstrip("/")
-        ):
-            url = _rewrite_presigned_host(url, public_base)
         return url, datetime.now(tz=UTC) + timedelta(seconds=expires_seconds)
 
     def remove_object(self, bucket: str, key: str) -> None:
@@ -153,17 +161,21 @@ def _strip_scheme(url: str) -> str:
     return url
 
 
-def _rewrite_presigned_host(url: str, public_base: str) -> str:
-    """Replace the internal host:port with the public base URL.
+def _validate_presign_endpoint(url: str) -> None:
+    """Reject public endpoints that would require path-aware S3 URL signing."""
+    parsed = urlparse(url if "://" in url else f"//{url}")
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise ValueError("S3_PUBLIC_ENDPOINT must not include a path, query, or fragment")
 
-    Presigned URLs include ``X-Amz-SignedHeaders=host`` so we don't need to
-    resign — we just swap the scheme + host.
-    """
-    from urllib.parse import urlparse, urlunparse
 
+def _minio_endpoint_and_secure(url: str, *, default_secure: bool) -> tuple[str, bool]:
+    """Return the MinIO endpoint and TLS flag for an S3 endpoint URL."""
+    if "://" not in url:
+        return url, default_secure
     parsed = urlparse(url)
-    public = urlparse(public_base)
-    return urlunparse(parsed._replace(scheme=public.scheme, netloc=public.netloc))
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("S3_PUBLIC_ENDPOINT scheme must be http or https")
+    return parsed.netloc, parsed.scheme == "https"
 
 
 # Module-level singleton — the rest of the app imports this directly.

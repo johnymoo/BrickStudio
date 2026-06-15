@@ -1,0 +1,15 @@
+{
+  "part_id": "duplo-2x2-brick",
+  "system": "duplo",
+  "kind": "brick",
+  "units_x": 2,
+  "units_y": 2,
+  "raw_measurements_mm": {
+    "outer_pitch_mm": 36.0,
+    "inner_pitch_mm": 4.0,
+    "stud_diameter_mm": 16.0,
+    "brick_height_net_mm": 17.0,
+    "brick_height_total_mm": 24.0
+  },
+  "note": "Reference DUPLO 2x2 brick — public spec expressed as the 5 caliper-friendly numbers. Use this as the no-measurement baseline; for your real brick copy this file to duplo-2x2-brick-measured.json and edit the 5 numbers in raw_measurements_mm."
+}

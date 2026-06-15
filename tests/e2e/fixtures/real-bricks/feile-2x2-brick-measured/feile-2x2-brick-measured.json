@@ -1,0 +1,72 @@
+{
+  "part_id": "user-measured-brick-001",
+  "system": "feile",
+  "kind": "brick",
+  "units_x": 2,
+  "units_y": 2,
+  "raw_measurements_mm": {
+    "outer_pitch_mm": 25.19,
+    "inner_pitch_mm": 6.52,
+    "stud_diameter_mm": 9.41,
+    "brick_height_net_mm": 19.18,
+    "brick_height_total_mm": 24.58
+  },
+  "derived_spec_mm": {
+    "unit_mm": 15.855,
+    "knob_diameter_mm": 9.41,
+    "height_mm": 19.18,
+    "knob_height_mm": 5.399999999999999
+  },
+  "cross_check_warnings": [],
+  "block_spec": {
+    "system": "feile",
+    "kind": "brick",
+    "units_x": 2,
+    "units_y": 2,
+    "unit_mm": 15.855,
+    "height_mm": 19.18,
+    "knob_diameter_mm": 9.41,
+    "knob_height_mm": 5.399999999999999,
+    "tube_diameter_mm": null,
+    "tube_height_mm": null,
+    "tube": false
+  },
+  "resolved_mm": {
+    "unit": 15.855,
+    "height": 19.18,
+    "knob_d": 9.41,
+    "knob_h": 5.399999999999999,
+    "tube_d": 11.2,
+    "tube_h": 15.5
+  },
+  "public_spec_mm": {
+    "unit_mm": 16.0,
+    "height_mm": 19.2,
+    "knob_diameter_mm": 9.4,
+    "knob_height_mm": 5.4
+  },
+  "deviation_from_public_mm": {
+    "unit_mm": -0.145,
+    "knob_diameter_mm": 0.01,
+    "knob_height_mm": -0.0,
+    "height_mm": -0.02
+  },
+  "glb": {
+    "path": "/tmp/measure-test-real/user-measured-brick-001.glb",
+    "vertex_count": 272,
+    "face_count": 524,
+    "watertight": true,
+    "size_bytes": 10336,
+    "bbox_min": [
+      -15.855,
+      -15.855,
+      0.0
+    ],
+    "bbox_max": [
+      15.855,
+      15.855,
+      24.58
+    ]
+  },
+  "note": "First real measurement from user 2026-06-06 20:34 — 国产费乐 2x2 brick. user 实测 跟 feile public spec (16/9.4/19.2/5.4) 偏差 < 0.15mm, cross-check 通过. Real brick spec.json path: tests/e2e/fixtures/real-bricks/feile-2x2-brick-measured/"
+}

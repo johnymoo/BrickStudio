@@ -330,7 +330,7 @@ async def _truncate_tables() -> AsyncIterator[None]:
         )
         if result.first() is not None:
             await session.execute(
-                text("TRUNCATE TABLE assets, jobs, captures RESTART IDENTITY CASCADE")
+                text("TRUNCATE TABLE parts, assets, jobs, captures RESTART IDENTITY CASCADE")
             )
         await session.commit()
     yield

@@ -12,6 +12,8 @@ from models.schemas import (
     ErrorEnvelope,
     HealthRead,
     JobRead,
+    LibraryPartRead,
+    LibraryPartUpdate,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     "ErrorEnvelope",
     "HealthRead",
     "JobRead",
+    "LibraryPartRead",
+    "LibraryPartUpdate",
 ]

@@ -207,7 +207,7 @@ def test_reconstruct_task_end_to_end(
     import tempfile
 
     from app.config import settings
-    from db.models import Asset, Capture, Job
+    from db.models import Asset, Capture, Job, Part
     from db.session import async_session_factory
     from workers.tasks.reconstruct import reconstruct
 
@@ -227,11 +227,12 @@ def test_reconstruct_task_end_to_end(
     assert result.successful() or result.state == "SUCCESS", result.state
 
     # ---- Assert DB state ----------------------------------------------
-    async def _db_state() -> tuple[Job | None, list[Asset]]:
+    async def _db_state() -> tuple[Job | None, list[Asset], Part | None]:
         f = async_session_factory()
         async with f() as session:
             job = await session.get(Job, uuid.UUID(job_id))
             cap = await session.get(Capture, uuid.UUID(capture_id))
+            part = None
             if cap is not None:
                 # Re-load job with assets eagerly
                 from sqlalchemy import select
@@ -243,9 +244,14 @@ def test_reconstruct_task_end_to_end(
                     .options(selectinload(Job.assets))
                 )
                 job = (await session.execute(stmt)).scalar_one_or_none()
-            return job, list(job.assets) if job else []
+                part = (
+                    await session.scalars(
+                        select(Part).where(Part.capture_id == uuid.UUID(capture_id))
+                    )
+                ).one_or_none()
+            return job, list(job.assets) if job else [], part
 
-    job, assets = asyncio.run(_db_state())
+    job, assets, part = asyncio.run(_db_state())
     assert job is not None
     assert job.status == "completed", f"job.status={job.status} stage={job.stage} error={job.error}"
     assert job.progress == 100
@@ -272,7 +278,18 @@ def test_reconstruct_task_end_to_end(
     assert asset.meta["face_count"] > 0
     # The brief allows any of colmap / meshroom / open3d_fallback; on CI
     # machines without binaries, the fallback is the only one reachable.
-    assert asset.meta["pipeline_used"] in {"colmap", "meshroom", "open3d_fallback"}
+    # Multi-photo path uses ``open3d_pure_photogrammetry`` (8+ photos,
+    # no COLMAP binary present).
+    assert asset.meta["pipeline_used"] in {
+        "colmap",
+        "colmap_sfm",
+        "meshroom",
+        "open3d_fallback",
+        "open3d_pure_photogrammetry",
+    }
+    assert part is not None
+    assert part.source_mode == "photo"
+    assert part.asset_id == asset.id
 
     # ---- Assert GLB is downloadable ------------------------------------
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:

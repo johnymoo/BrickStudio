@@ -49,4 +49,15 @@ describe("useJobStore", () => {
     expect(list[0]?.id).toBe("job-b");
     expect(list[1]?.id).toBe("job-a");
   });
+
+  it("sets the capture mode on an existing job", () => {
+    useJobStore.getState().addJob(SAMPLE_JOB);
+    useJobStore.getState().setJobCaptureMode("job-a", "phone_walkaround");
+    expect(useJobStore.getState().jobs["job-a"]?.captureMode).toBe("phone_walkaround");
+  });
+
+  it("setJobCaptureMode is a no-op for unknown ids", () => {
+    useJobStore.getState().setJobCaptureMode("missing", "studio_turntable");
+    expect(useJobStore.getState().jobs["missing"]).toBeUndefined();
+  });
 });

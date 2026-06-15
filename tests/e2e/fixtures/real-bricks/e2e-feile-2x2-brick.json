@@ -1,0 +1,72 @@
+{
+  "part_id": "e2e-feile-2x2-brick",
+  "system": "feile",
+  "kind": "brick",
+  "units_x": 2,
+  "units_y": 2,
+  "raw_measurements_mm": {
+    "outer_pitch_mm": 25.4,
+    "inner_pitch_mm": 6.6,
+    "stud_diameter_mm": 9.4,
+    "brick_height_net_mm": 19.2,
+    "brick_height_total_mm": 24.6
+  },
+  "derived_spec_mm": {
+    "unit_mm": 16.0,
+    "knob_diameter_mm": 9.4,
+    "height_mm": 19.2,
+    "knob_height_mm": 5.400000000000002
+  },
+  "cross_check_warnings": [],
+  "block_spec": {
+    "system": "feile",
+    "kind": "brick",
+    "units_x": 2,
+    "units_y": 2,
+    "unit_mm": 16.0,
+    "height_mm": 19.2,
+    "knob_diameter_mm": 9.4,
+    "knob_height_mm": 5.400000000000002,
+    "tube_diameter_mm": null,
+    "tube_height_mm": null,
+    "tube": false
+  },
+  "resolved_mm": {
+    "unit": 16.0,
+    "height": 19.2,
+    "knob_d": 9.4,
+    "knob_h": 5.400000000000002,
+    "tube_d": 11.2,
+    "tube_h": 15.5
+  },
+  "public_spec_mm": {
+    "unit_mm": 16.0,
+    "height_mm": 19.2,
+    "knob_diameter_mm": 9.4,
+    "knob_height_mm": 5.4
+  },
+  "deviation_from_public_mm": {
+    "unit_mm": 0.0,
+    "knob_diameter_mm": 0.0,
+    "knob_height_mm": 0.0,
+    "height_mm": 0.0
+  },
+  "glb": {
+    "path": "/tmp/parametric-full-compare/e2e-feile-2x2-brick.glb",
+    "vertex_count": 272,
+    "face_count": 524,
+    "watertight": true,
+    "size_bytes": 10280,
+    "bbox_min": [
+      -16.0,
+      -16.0,
+      0.0
+    ],
+    "bbox_max": [
+      16.0,
+      16.0,
+      24.6
+    ]
+  },
+  "note": ""
+}

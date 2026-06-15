@@ -1,0 +1,15 @@
+{
+  "part_id": "lego-2x4-brick",
+  "system": "lego",
+  "kind": "brick",
+  "units_x": 2,
+  "units_y": 4,
+  "raw_measurements_mm": {
+    "outer_pitch_mm": 24.8,
+    "inner_pitch_mm": 11.2,
+    "stud_diameter_mm": 4.8,
+    "brick_height_net_mm": 9.6,
+    "brick_height_total_mm": 11.3
+  },
+  "note": "Reference LEGO 2x4 brick — public spec expressed as 5 caliper-friendly numbers. knob_h = 11.3 - 9.6 = 1.7 mm (the LEGO stud height, matches public)."
+}
