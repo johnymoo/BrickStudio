@@ -225,6 +225,7 @@ pnpm --filter @blocktool/web exec playwright test
 # 单跑 smoke / full-flow
 pnpm --filter @blocktool/web exec playwright test tests/e2e/smoke.spec.ts
 pnpm --filter @blocktool/web exec playwright test tests/e2e/full-flow.spec.ts
+LIBRARY_ADMIN_TOKEN=blocktool_dev_admin_change_me pnpm exec playwright test tests/e2e/library-live.spec.ts
 
 # 只跑 8-photo 真实照片用例 (阶段二新增)
 pnpm --filter @blocktool/web exec playwright test tests/e2e/full-flow.spec.ts --grep "8 photos"

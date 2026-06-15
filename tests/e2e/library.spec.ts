@@ -7,10 +7,17 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 const SCREENSHOTS_DIR = path.join(__dirname, "screenshots");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const BASE_URL = process.env.BLOCKTOOL_E2E_MOCK_BASE_URL || "http://localhost:4173";
 const PART_ID = "lib-e2e-001";
+const ASSET_FIXTURE = path.join(__dirname, "fixtures", "real-bricks", "e2e-api-feile-2x2-brick.glb");
+const ASSET_DATA_URL = `data:model/gltf-binary;base64,${readFileSync(ASSET_FIXTURE).toString("base64")}`;
+const CREATED_AT = new Date(Date.UTC(2026, 5, 14, 10, 0, 0)).toISOString();
+const VERIFIED_AT = new Date(Date.UTC(2026, 5, 14, 10, 0, 1)).toISOString();
+const ASSET_EXPIRES_AT = new Date(Date.UTC(2026, 5, 15, 10, 0, 0)).toISOString();
 
 const PART = {
   part_id: PART_ID,
@@ -26,8 +33,8 @@ const PART = {
   name: "E2E FEILE 2x2",
   notes: null,
   status: "pending" as "pending" | "verified" | "rejected",
-  created_at: "2026-06-14T10:00:00.000Z",
-  updated_at: "2026-06-14T10:00:00.000Z",
+  created_at: CREATED_AT,
+  updated_at: CREATED_AT,
 };
 
 async function mockLibraryApi(page: Page) {
@@ -41,7 +48,7 @@ async function mockLibraryApi(page: Page) {
     if (isDetailPath && request.method() === "PATCH") {
       const patch = request.postDataJSON();
       expect(patch).toEqual({ status: "verified" });
-      current = { ...current, ...patch, updated_at: "2026-06-14T10:00:01.000Z" };
+      current = { ...current, ...patch, updated_at: VERIFIED_AT };
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -88,8 +95,8 @@ async function mockLibraryApi(page: Page) {
       body: JSON.stringify({
         asset_id: PART.asset_id,
         kind: "mesh_gltf",
-        url: "data:application/octet-stream;base64,Z2xURg==",
-        expires_at: "2026-06-15T10:00:00.000Z",
+        url: ASSET_DATA_URL,
+        expires_at: ASSET_EXPIRES_AT,
       }),
     });
   });
@@ -97,7 +104,7 @@ async function mockLibraryApi(page: Page) {
 
 test.describe("part library", () => {
   test.use({
-    baseURL: "http://localhost:4173",
+    baseURL: BASE_URL,
     viewport: { width: 1280, height: 900 },
   });
 
