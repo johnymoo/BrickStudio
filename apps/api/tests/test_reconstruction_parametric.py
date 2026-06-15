@@ -251,6 +251,36 @@ async def test_create_parametric_block_does_not_cleanup_after_dispatch_boundary_
     assert removed_keys == []
 
 
+async def test_create_parametric_block_does_not_cleanup_when_dispatcher_fails_after_commit(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    removed_keys: list[str] = []
+    data, files = _multipart_with_photos(1)
+
+    async def fake_dispatch(
+        session: AsyncSession,
+        *_args: object,
+        **_kwargs: object,
+    ) -> uuid.UUID:
+        await session.commit()
+        raise RuntimeError("dispatcher failed after commit")
+
+    monkeypatch.setattr("api.v1.parametric_blocks.commit_and_dispatch_reconstruct", fake_dispatch)
+    monkeypatch.setattr("api.v1.parametric_blocks.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+
+    with pytest.raises(RuntimeError, match="dispatcher failed after commit"):
+        await app_client.post(
+            "/api/v1/parametric-blocks",
+            data=data,
+            files=files,
+        )
+
+    assert removed_keys == []
+
+
 async def test_create_parametric_block_with_21_photos_returns_422(
     app_client: AsyncIterator,
 ) -> None:

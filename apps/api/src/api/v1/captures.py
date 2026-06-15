@@ -75,21 +75,21 @@ async def create_capture(
     )],
     capture_mode: Annotated[CaptureMode, Form()] = DEFAULT_CAPTURE_MODE,
 ) -> CaptureRead:
-    n = len(images)
-    if n < MIN_IMAGES or n > MAX_IMAGES:
-        raise CaptureInvalid(
-            f"need {MIN_IMAGES} <= image_count <= {MAX_IMAGES}, got {n}",
-            details={
-                "image_count": n,
-                "min": MIN_IMAGES,
-                "max": MAX_IMAGES,
-            },
-        )
-
     capture_id = uuid.uuid4()
     keys: list[str] = []
     staged_uploads: list[tuple[str, bytes, str]] = []
     try:
+        n = len(images)
+        if n < MIN_IMAGES or n > MAX_IMAGES:
+            raise CaptureInvalid(
+                f"need {MIN_IMAGES} <= image_count <= {MAX_IMAGES}, got {n}",
+                details={
+                    "image_count": n,
+                    "min": MIN_IMAGES,
+                    "max": MAX_IMAGES,
+                },
+            )
+
         total_bytes = 0
         for idx, upload in enumerate(images):
             ext = extension_for_allowed_upload(
@@ -141,12 +141,12 @@ async def create_capture(
         )
         session.add(job)
 
+        durable_state_committed = True
         job_id = await commit_and_dispatch_reconstruct(
             session,
             capture_id=capture_id,
             job=job,
         )
-        durable_state_committed = True
         await session.refresh(capture)
     except Exception:
         if not durable_state_committed:

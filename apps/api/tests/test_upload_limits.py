@@ -106,3 +106,100 @@ async def test_extension_for_allowed_upload_rejects_heic_without_decoder_support
 
     with pytest.raises(CaptureInvalid):
         extension_for_allowed_upload(upload, label="image #0", allowed_content_types=ALLOWED_CONTENT_TYPES)
+
+
+async def test_capture_route_closes_uploads_on_image_count_validation_error() -> None:
+    from api.v1.captures import create_capture
+
+    uploads = [_upload(f"{idx}.png", _png()) for idx in range(3)]
+
+    with pytest.raises(CaptureInvalid):
+        await create_capture(
+            session=None,  # type: ignore[arg-type]
+            part_id="too-few-images",
+            images=uploads,
+        )
+
+    assert all(upload.file.closed for upload in uploads)
+
+
+async def test_ar_capture_route_closes_uploads_on_image_count_validation_error() -> None:
+    from api.v1.ar_captures import create_ar_capture
+
+    recognition_rgb = _upload("rgb.png", _png())
+    recognition_depth = _upload("depth.png", _png())
+    uploads = [_upload(f"{idx}.png", _png()) for idx in range(3)]
+
+    with pytest.raises(CaptureInvalid):
+        await create_ar_capture(
+            session=None,  # type: ignore[arg-type]
+            kind="brick",
+            recognition_rgb=recognition_rgb,
+            recognition_depth=recognition_depth,
+            ar_metadata="{}",
+            images=uploads,
+        )
+
+    assert recognition_rgb.file.closed
+    assert recognition_depth.file.closed
+    assert all(upload.file.closed for upload in uploads)
+
+
+async def test_ar_capture_route_closes_uploads_on_metadata_validation_error() -> None:
+    from api.v1.ar_captures import create_ar_capture
+
+    recognition_rgb = _upload("rgb.png", _png())
+    recognition_depth = _upload("depth.png", _png())
+    uploads = [_upload(f"{idx}.png", _png()) for idx in range(4)]
+
+    with pytest.raises(CaptureInvalid):
+        await create_ar_capture(
+            session=None,  # type: ignore[arg-type]
+            kind="brick",
+            recognition_rgb=recognition_rgb,
+            recognition_depth=recognition_depth,
+            ar_metadata="not-json",
+            images=uploads,
+        )
+
+    assert recognition_rgb.file.closed
+    assert recognition_depth.file.closed
+    assert all(upload.file.closed for upload in uploads)
+
+
+async def test_parametric_route_closes_uploads_on_photo_count_validation_error() -> None:
+    from api.v1.parametric_blocks import create_parametric_block
+
+    uploads = [_upload(f"{idx}.png", _png()) for idx in range(21)]
+
+    with pytest.raises(CaptureInvalid):
+        await create_parametric_block(
+            session=None,  # type: ignore[arg-type]
+            system="duplo",
+            kind="brick",
+            units_x=2,
+            units_y=2,
+            raw_measurements_mm="{}",
+            photos=uploads,
+        )
+
+    assert all(upload.file.closed for upload in uploads)
+
+
+async def test_parametric_route_closes_uploads_on_measurement_validation_error() -> None:
+    from api.v1.parametric_blocks import create_parametric_block
+
+    uploads = [_upload(f"{idx}.png", _png()) for idx in range(2)]
+
+    with pytest.raises(CaptureInvalid):
+        await create_parametric_block(
+            session=None,  # type: ignore[arg-type]
+            system="duplo",
+            kind="brick",
+            units_x=2,
+            units_y=2,
+            raw_measurements_mm="not-json",
+            photos=uploads,
+        )
+
+    assert all(upload.file.closed for upload in uploads)

@@ -223,67 +223,65 @@ async def create_parametric_block(
         ),
     ] = None,
 ) -> JSONResponse:
-    # ---- 1. Validate photo count --------------------------------------------
     photos_list = photos or []
-    n = len(photos_list)
-    if n < MIN_PHOTOS or n > MAX_PHOTOS:
-        raise CaptureInvalid(
-            f"need {MIN_PHOTOS} <= photo_count <= {MAX_PHOTOS}, got {n}",
-            details={"photo_count": n, "min": MIN_PHOTOS, "max": MAX_PHOTOS},
-        )
-
-    # ---- 2. Parse + validate raw_measurements_mm ---------------------------
-    try:
-        raw_obj = json.loads(raw_measurements_mm)
-    except json.JSONDecodeError as exc:
-        raise CaptureInvalid(
-            f"raw_measurements_mm is not valid JSON: {exc.msg} (line {exc.lineno})",
-            details={"line": exc.lineno, "column": exc.colno},
-        ) from exc
-    if not isinstance(raw_obj, dict):
-        raise CaptureInvalid(
-            "raw_measurements_mm must be a JSON object",
-            details={"got_type": type(raw_obj).__name__},
-        )
-
-    missing = [k for k in _RAW_KEYS if k not in raw_obj]
-    if missing:
-        raise CaptureInvalid(
-            f"raw_measurements_mm missing keys: {missing}",
-            details={"missing": missing, "required": list(_RAW_KEYS)},
-        )
-    # Coerce + range-check
-    raw: dict[str, float] = {}
-    for k in _RAW_KEYS:
-        v = raw_obj[k]
-        try:
-            v_f = float(v)
-        except (TypeError, ValueError) as exc:
-            raise CaptureInvalid(
-                f"raw_measurements_mm.{k} is not numeric: {v!r}",
-                details={"key": k, "value": v},
-            ) from exc
-        if v_f <= 0:
-            raise CaptureInvalid(
-                f"raw_measurements_mm.{k} must be > 0, got {v_f}",
-                details={"key": k, "value": v_f},
-            )
-        raw[k] = v_f
-
-    cross_warnings = _cross_check_raw(raw)
-    derived = _derive_spec_from_raw(raw)
-
-    # ---- 3. Default part_id -------------------------------------------------
-    if not part_id:
-        part_id = f"{system}-{kind}-{units_x}x{units_y}"
-
-    # ---- 4. Upload photos (0-20) to MinIO ---------------------------------
-    # Allocate the capture id BEFORE the upload loop so the MinIO key
-    # is stable (and so the no-photos path still has a valid id).
     capture_id = uuid.uuid4()
     keys: list[str] = []
     staged_uploads: list[tuple[str, bytes, str]] = []
     try:
+        # ---- 1. Validate photo count --------------------------------------------
+        n = len(photos_list)
+        if n < MIN_PHOTOS or n > MAX_PHOTOS:
+            raise CaptureInvalid(
+                f"need {MIN_PHOTOS} <= photo_count <= {MAX_PHOTOS}, got {n}",
+                details={"photo_count": n, "min": MIN_PHOTOS, "max": MAX_PHOTOS},
+            )
+
+        # ---- 2. Parse + validate raw_measurements_mm ---------------------------
+        try:
+            raw_obj = json.loads(raw_measurements_mm)
+        except json.JSONDecodeError as exc:
+            raise CaptureInvalid(
+                f"raw_measurements_mm is not valid JSON: {exc.msg} (line {exc.lineno})",
+                details={"line": exc.lineno, "column": exc.colno},
+            ) from exc
+        if not isinstance(raw_obj, dict):
+            raise CaptureInvalid(
+                "raw_measurements_mm must be a JSON object",
+                details={"got_type": type(raw_obj).__name__},
+            )
+
+        missing = [k for k in _RAW_KEYS if k not in raw_obj]
+        if missing:
+            raise CaptureInvalid(
+                f"raw_measurements_mm missing keys: {missing}",
+                details={"missing": missing, "required": list(_RAW_KEYS)},
+            )
+        # Coerce + range-check
+        raw: dict[str, float] = {}
+        for k in _RAW_KEYS:
+            v = raw_obj[k]
+            try:
+                v_f = float(v)
+            except (TypeError, ValueError) as exc:
+                raise CaptureInvalid(
+                    f"raw_measurements_mm.{k} is not numeric: {v!r}",
+                    details={"key": k, "value": v},
+                ) from exc
+            if v_f <= 0:
+                raise CaptureInvalid(
+                    f"raw_measurements_mm.{k} must be > 0, got {v_f}",
+                    details={"key": k, "value": v_f},
+                )
+            raw[k] = v_f
+
+        cross_warnings = _cross_check_raw(raw)
+        derived = _derive_spec_from_raw(raw)
+
+        # ---- 3. Default part_id -------------------------------------------------
+        if not part_id:
+            part_id = f"{system}-{kind}-{units_x}x{units_y}"
+
+        # ---- 4. Upload photos (0-20) to MinIO ---------------------------------
         total_bytes = 0
         for idx, upload in enumerate(photos_list):
             ext = extension_for_allowed_upload(
@@ -352,12 +350,12 @@ async def create_parametric_block(
         )
         session.add(job)
 
+        durable_state_committed = True
         job_id = await commit_and_dispatch_reconstruct(
             session,
             capture_id=capture_id,
             job=job,
         )
-        durable_state_committed = True
         await session.refresh(capture)
     except Exception:
         if not durable_state_committed:

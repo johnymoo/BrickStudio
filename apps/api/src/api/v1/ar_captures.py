@@ -105,28 +105,28 @@ async def create_ar_capture(
     system_hint: Annotated[SystemHint | None, Form()] = None,
     part_id: Annotated[str | None, Form(max_length=64)] = None,
 ) -> JSONResponse:
-    # ---- 1. Validate image count ----------------------------------------
     imgs = images or []
-    if len(imgs) < MIN_IMAGES or len(imgs) > MAX_IMAGES:
-        raise CaptureInvalid(
-            f"need {MIN_IMAGES} <= image_count <= {MAX_IMAGES}, got {len(imgs)}",
-            details={"image_count": len(imgs), "min": MIN_IMAGES, "max": MAX_IMAGES},
-        )
-
-    # ---- 2. Parse ar_metadata -------------------------------------------
-    try:
-        meta = json.loads(ar_metadata)
-    except json.JSONDecodeError as exc:
-        raise CaptureInvalid(
-            f"ar_metadata is not valid JSON: {exc.msg} (line {exc.lineno})",
-            details={"line": exc.lineno, "column": exc.colno},
-        ) from exc
-    if not isinstance(meta, dict):
-        raise CaptureInvalid("ar_metadata must be a JSON object", details={"got_type": type(meta).__name__})
-
-    # ---- 3. Read recognition frame + angle bytes ------------------------
     angle_uploads: list[tuple[str, bytes, str]] = []
     try:
+        # ---- 1. Validate image count ----------------------------------------
+        if len(imgs) < MIN_IMAGES or len(imgs) > MAX_IMAGES:
+            raise CaptureInvalid(
+                f"need {MIN_IMAGES} <= image_count <= {MAX_IMAGES}, got {len(imgs)}",
+                details={"image_count": len(imgs), "min": MIN_IMAGES, "max": MAX_IMAGES},
+            )
+
+        # ---- 2. Parse ar_metadata -------------------------------------------
+        try:
+            meta = json.loads(ar_metadata)
+        except json.JSONDecodeError as exc:
+            raise CaptureInvalid(
+                f"ar_metadata is not valid JSON: {exc.msg} (line {exc.lineno})",
+                details={"line": exc.lineno, "column": exc.colno},
+            ) from exc
+        if not isinstance(meta, dict):
+            raise CaptureInvalid("ar_metadata must be a JSON object", details={"got_type": type(meta).__name__})
+
+        # ---- 3. Read recognition frame + angle bytes ------------------------
         rgb_ext = extension_for_allowed_upload(
             recognition_rgb,
             label="recognition_rgb",
@@ -219,12 +219,12 @@ async def create_ar_capture(
         if recognized:
             job = Job(capture_id=capture_id, kind="reconstruct", status="pending", progress=0, stage="queued")
             session.add(job)
+            durable_state_committed = True
             job_id = await commit_and_dispatch_reconstruct(
                 session,
                 capture_id=capture_id,
                 job=job,
             )
-            durable_state_committed = True
 
         await session.commit()
         durable_state_committed = True

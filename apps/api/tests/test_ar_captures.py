@@ -261,6 +261,36 @@ async def test_ar_capture_does_not_cleanup_after_needs_measurement_commit_bounda
     assert removed_keys == []
 
 
+async def test_ar_capture_does_not_cleanup_when_dispatcher_fails_after_commit(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    rgb, depth, meta = make_ar_bundle("feile")
+    removed_keys: list[str] = []
+
+    async def fake_dispatch(
+        session: AsyncSession,
+        *_args: object,
+        **_kwargs: object,
+    ) -> uuid.UUID:
+        await session.commit()
+        raise RuntimeError("dispatcher failed after commit")
+
+    monkeypatch.setattr("api.v1.ar_captures.commit_and_dispatch_reconstruct", fake_dispatch)
+    monkeypatch.setattr("api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+
+    with pytest.raises(RuntimeError, match="dispatcher failed after commit"):
+        await app_client.post(
+            "/api/v1/ar-captures",
+            data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+            files=_files(rgb, depth),
+        )
+
+    assert removed_keys == []
+
+
 # ---------------------------------------------------------------------------
 # Fixtures for e2e tests
 # ---------------------------------------------------------------------------
