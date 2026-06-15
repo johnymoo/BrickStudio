@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import uuid
 from typing import Annotated, Literal
 
@@ -122,6 +123,7 @@ _RAW_KEYS: tuple[str, ...] = (
 # (CROSS_CHECK_TOL_MM). When the direct ③ reading and the
 # (1A - 1B)/2 derivation differ by more than this, we tag a warning.
 _CROSS_CHECK_TOL_MM: float = 0.5
+_MAX_MEASUREMENT_MM: float = 500.0
 
 
 def _derive_spec_from_raw(raw: dict[str, float]) -> dict[str, float]:
@@ -170,6 +172,41 @@ def _cross_check_raw(raw: dict[str, float]) -> list[str]:
             f"(> {_CROSS_CHECK_TOL_MM}); check 1B reading."
         )
     return warnings
+
+
+def _validate_raw_measurements(raw: dict[str, float]) -> None:
+    for key, value in raw.items():
+        if not math.isfinite(value):
+            raise CaptureInvalid(
+                f"raw_measurements_mm.{key} must be finite",
+                details={"key": key, "value": str(value)},
+            )
+        if value <= 0:
+            raise CaptureInvalid(
+                f"raw_measurements_mm.{key} must be > 0, got {value}",
+                details={"key": key, "value": value},
+            )
+        if value > _MAX_MEASUREMENT_MM:
+            raise CaptureInvalid(
+                f"raw_measurements_mm.{key} is unrealistically large",
+                details={"key": key, "value": value, "max": _MAX_MEASUREMENT_MM},
+            )
+    if raw["brick_height_total_mm"] <= raw["brick_height_net_mm"]:
+        raise CaptureInvalid(
+            "brick_height_total_mm must be greater than brick_height_net_mm",
+            details={
+                "brick_height_total_mm": raw["brick_height_total_mm"],
+                "brick_height_net_mm": raw["brick_height_net_mm"],
+            },
+        )
+    if raw["outer_pitch_mm"] <= raw["inner_pitch_mm"]:
+        raise CaptureInvalid(
+            "outer_pitch_mm must be greater than inner_pitch_mm",
+            details={
+                "outer_pitch_mm": raw["outer_pitch_mm"],
+                "inner_pitch_mm": raw["inner_pitch_mm"],
+            },
+        )
 
 
 def _settings_s3_bucket_raw() -> str:
@@ -274,13 +311,9 @@ async def create_parametric_block(
                     f"raw_measurements_mm.{k} is not numeric: {v!r}",
                     details={"key": k, "value": v},
                 ) from exc
-            if v_f <= 0:
-                raise CaptureInvalid(
-                    f"raw_measurements_mm.{k} must be > 0, got {v_f}",
-                    details={"key": k, "value": v_f},
-                )
             raw[k] = v_f
 
+        _validate_raw_measurements(raw)
         cross_warnings = _cross_check_raw(raw)
         derived = _derive_spec_from_raw(raw)
 

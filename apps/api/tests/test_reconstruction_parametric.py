@@ -360,6 +360,48 @@ async def test_create_parametric_block_rejects_non_positive(
     assert resp.status_code == 422, resp.text
 
 
+async def test_create_parametric_block_rejects_non_finite_measurement(
+    app_client: AsyncIterator,
+) -> None:
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, stud_diameter_mm=1e309)
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    if "error" in body:
+        assert body["error"]["code"] == "CAPTURE_INVALID"
+
+
+async def test_create_parametric_block_rejects_negative_knob_height(
+    app_client: AsyncIterator,
+) -> None:
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, brick_height_total_mm=10.0, brick_height_net_mm=17.0)
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    if "error" in body:
+        assert body["error"]["code"] == "CAPTURE_INVALID"
+
+
+async def test_create_parametric_block_rejects_absurd_measurement(
+    app_client: AsyncIterator,
+) -> None:
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, outer_pitch_mm=10_000.0)
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+
+
 async def test_create_parametric_block_rejects_unknown_system(
     app_client: AsyncIterator,
 ) -> None:
@@ -384,16 +426,15 @@ async def test_create_parametric_block_rejects_units_out_of_range(
 async def test_create_parametric_block_with_cross_check_warnings(
     app_client: AsyncIterator,
 ) -> None:
-    """1A ≤ 1B → the route still accepts the row, but flags it."""
+    """Stud diameter mismatch → the route still accepts the row, but flags it."""
     data = _multipart_no_photos()
-    # Make outer < inner so the warning fires.
-    raw = dict(DUPLO_2X2_RAW, outer_pitch_mm=2.0, inner_pitch_mm=4.0)
+    raw = dict(DUPLO_2X2_RAW, stud_diameter_mm=10.0)
     data["raw_measurements_mm"] = json.dumps(raw)
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["cross_check_warnings"]  # non-empty
-    assert any("1A" in w for w in body["cross_check_warnings"])
+    assert any("stud_Ø" in w for w in body["cross_check_warnings"])
 
 
 # ---------------------------------------------------------------------------
