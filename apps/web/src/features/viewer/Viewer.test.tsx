@@ -133,6 +133,12 @@ describe("Viewer", () => {
     await waitFor(() => expect(screen.getByTestId("viewer-error")).toBeInTheDocument());
   });
 
+  it("shows a fallback error when the asset endpoint rejects without an Error", async () => {
+    globalThis.fetch = vi.fn(() => Promise.reject(null)) as typeof globalThis.fetch;
+    render(<Viewer assetId="asset-bad" />);
+    await waitFor(() => expect(screen.getByTestId("viewer-error")).toHaveTextContent("无法加载模型资源"));
+  });
+
   it("aborts stale asset URL requests and ignores their resolved URLs", async () => {
     const first = deferred<Response>();
     const second = deferred<Response>();

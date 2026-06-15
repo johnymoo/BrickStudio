@@ -12,6 +12,10 @@ const TABS: ReadonlyArray<{ id: PartStatus; label: string }> = [
   { id: "rejected", label: "已拒绝" },
 ];
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : "无法连接零件库 API";
+}
+
 export function LibraryList() {
   const [tab, setTab] = useState<PartStatus>("pending");
   const [parts, setParts] = useState<LibraryPart[]>([]);
@@ -27,10 +31,10 @@ export function LibraryList() {
       .then((rows) => {
         if (!controller.signal.aborted) setParts(rows);
       })
-      .catch((err: Error) => {
+      .catch((err: unknown) => {
         if (controller.signal.aborted) return;
         setParts([]);
-        setError(err.message || "无法连接零件库 API");
+        setError(errorMessage(err));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);

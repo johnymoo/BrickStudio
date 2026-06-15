@@ -76,6 +76,37 @@ describe("LibraryList", () => {
     expect(screen.queryByText("这里还没有零件")).not.toBeInTheDocument();
   });
 
+  it("renders a fallback error when the API rejects without an Error", async () => {
+    listMock.mockRejectedValue(null);
+    render(
+      <MemoryRouter>
+        <LibraryList />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText("零件库加载失败")).toBeInTheDocument());
+    expect(screen.getByText("无法连接零件库 API")).toBeInTheDocument();
+    expect(screen.queryByText("这里还没有零件")).not.toBeInTheDocument();
+  });
+
+  it("retries after an API error", async () => {
+    listMock
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce([part({ part_id: "p3", name: "gamma" })]);
+
+    render(
+      <MemoryRouter>
+        <LibraryList />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(screen.getByText("零件库加载失败")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("重试"));
+
+    await waitFor(() => expect(screen.getByText("gamma")).toBeInTheDocument());
+    expect(listMock).toHaveBeenCalledTimes(2);
+  });
+
   it("defaults to the pending tab and loads rejected only on its own tab", async () => {
     // Each tab filters by exactly one status (server-side). Default = pending.
     listMock.mockImplementation(async (status?: string) => {

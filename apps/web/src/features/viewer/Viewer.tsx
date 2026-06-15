@@ -15,6 +15,10 @@ type ViewerProps = {
   background?: string;
 };
 
+function assetErrorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : "无法加载模型资源";
+}
+
 /** Resolve a CSS `var(--name)` reference to its computed color, or pass through. */
 function resolveCssColor(value: string): string {
   const match = value.match(/^var\((--[a-z0-9-]+)\)$/i);
@@ -55,9 +59,9 @@ export function Viewer({ assetId, className, style, background = "var(--camera-b
         if (controller.signal.aborted) return;
         setUrl(info.url);
       })
-      .catch((err: Error) => {
+      .catch((err: unknown) => {
         if (controller.signal.aborted) return;
-        setError(err.message);
+        setError(assetErrorMessage(err));
       });
     return () => controller.abort();
   }, [assetId]);
