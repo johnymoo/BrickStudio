@@ -112,6 +112,10 @@ test.describe("part library", () => {
   let startedPreview = false;
 
   test.beforeAll(async () => {
+    if (process.env.BLOCKTOOL_E2E_MOCK_BASE_URL) {
+      return;
+    }
+
     let alreadyUp = false;
     try {
       const lsof = execSync("lsof -nP -iTCP:4173 -sTCP:LISTEN", { encoding: "utf8" });
