@@ -10,7 +10,12 @@ from sqlalchemy import func, select
 
 from app.config import settings
 from app.deps import DBSessionDep
-from api.v1.upload_limits import assert_total_upload_bytes, read_upload_bytes, validate_image_bytes
+from api.v1.upload_limits import (
+    assert_total_upload_bytes,
+    extension_for_allowed_upload,
+    read_upload_bytes,
+    validate_image_bytes,
+)
 from core.errors import CaptureInvalid, CaptureNotFound
 from db.models import Capture, Job
 from models.schemas import CaptureImagesRead, CaptureImageRead, CaptureRead, NeedsMeasurement
@@ -87,7 +92,11 @@ async def create_capture(
     try:
         total_bytes = 0
         for idx, upload in enumerate(images):
-            ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
+            ext = extension_for_allowed_upload(
+                upload,
+                label=f"image #{idx}",
+                allowed_content_types=ALLOWED_CONTENT_TYPES,
+            )
             filename = f"{idx:03d}.{ext}"
             key = raw_object_key(str(capture_id), filename)
             body = await read_upload_bytes(upload, label=f"image #{idx}")

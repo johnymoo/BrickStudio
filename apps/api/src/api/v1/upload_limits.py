@@ -33,6 +33,25 @@ async def read_upload_bytes(
     return body
 
 
+def extension_for_allowed_upload(
+    upload: UploadFile,
+    *,
+    label: str,
+    allowed_content_types: dict[str, str],
+) -> str:
+    content_type = (upload.content_type or "").lower()
+    if content_type not in allowed_content_types:
+        raise CaptureInvalid(
+            f"{label} has unsupported content type",
+            details={
+                "content_type": upload.content_type,
+                "filename": upload.filename,
+                "allowed_content_types": sorted(allowed_content_types),
+            },
+        )
+    return allowed_content_types[content_type]
+
+
 def validate_image_bytes(
     body: bytes,
     *,
@@ -73,4 +92,9 @@ def assert_total_upload_bytes(total: int) -> None:
         )
 
 
-__all__ = ["assert_total_upload_bytes", "read_upload_bytes", "validate_image_bytes"]
+__all__ = [
+    "assert_total_upload_bytes",
+    "extension_for_allowed_upload",
+    "read_upload_bytes",
+    "validate_image_bytes",
+]

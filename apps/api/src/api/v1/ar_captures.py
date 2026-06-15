@@ -26,7 +26,12 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.deps import DBSessionDep
-from api.v1.upload_limits import assert_total_upload_bytes, read_upload_bytes, validate_image_bytes
+from api.v1.upload_limits import (
+    assert_total_upload_bytes,
+    extension_for_allowed_upload,
+    read_upload_bytes,
+    validate_image_bytes,
+)
 from core.errors import CaptureInvalid
 from db.models import Capture, Job
 from models.schemas import ArCaptureRead, NeedsMeasurement, RecognizedBlock
@@ -129,7 +134,11 @@ async def create_ar_capture(
         assert_total_upload_bytes(total_bytes)
 
         for idx, upload in enumerate(imgs):
-            ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
+            ext = extension_for_allowed_upload(
+                upload,
+                label=f"image #{idx}",
+                allowed_content_types=ALLOWED_CONTENT_TYPES,
+            )
             body = await read_upload_bytes(upload, label=f"image #{idx}")
             validate_image_bytes(body, label=f"image #{idx}", content_type=upload.content_type)
             total_bytes += len(body)

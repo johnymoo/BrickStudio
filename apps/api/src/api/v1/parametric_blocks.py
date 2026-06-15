@@ -78,7 +78,12 @@ from fastapi import APIRouter, File, Form, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from app.deps import DBSessionDep
-from api.v1.upload_limits import assert_total_upload_bytes, read_upload_bytes, validate_image_bytes
+from api.v1.upload_limits import (
+    assert_total_upload_bytes,
+    extension_for_allowed_upload,
+    read_upload_bytes,
+    validate_image_bytes,
+)
 from core.errors import CaptureInvalid
 from db.models import Capture, Job
 from models.schemas import ParametricBlockRead
@@ -281,7 +286,11 @@ async def create_parametric_block(
     try:
         total_bytes = 0
         for idx, upload in enumerate(photos_list):
-            ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
+            ext = extension_for_allowed_upload(
+                upload,
+                label=f"photo #{idx}",
+                allowed_content_types=ALLOWED_CONTENT_TYPES,
+            )
             filename = f"ref_{idx:03d}.{ext}"
             # Use a per-capture prefix under a parametric/ sub-tree so
             # the bucket listing is easy to scope. The key shape mirrors

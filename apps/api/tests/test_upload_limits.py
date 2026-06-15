@@ -85,3 +85,14 @@ async def test_validate_image_bytes_rejects_over_pixel_limit(monkeypatch: pytest
         upload_limits.validate_image_bytes(_png(width=4, height=4), label="recognition_rgb", content_type="image/png")
 
     assert "too many pixels" in str(exc.value)
+
+
+async def test_extension_for_allowed_upload_rejects_unsupported_content_type() -> None:
+    from api.v1.upload_limits import extension_for_allowed_upload
+
+    upload = _upload("vector.svg", _png(), content_type="image/svg+xml")
+
+    with pytest.raises(CaptureInvalid) as exc:
+        extension_for_allowed_upload(upload, label="image #0", allowed_content_types={"image/png": "png"})
+
+    assert "unsupported content type" in str(exc.value)
