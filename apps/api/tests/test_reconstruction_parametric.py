@@ -320,8 +320,7 @@ async def test_create_parametric_block_rejects_bad_json(
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
     assert resp.status_code == 422, resp.text
     body = resp.json()
-    if "error" in body:
-        assert body["error"]["code"] == "CAPTURE_INVALID"
+    assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
 async def test_create_parametric_block_rejects_missing_keys(
@@ -335,9 +334,8 @@ async def test_create_parametric_block_rejects_missing_keys(
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
     assert resp.status_code == 422, resp.text
     body = resp.json()
-    if "error" in body:
-        assert body["error"]["code"] == "CAPTURE_INVALID"
-        assert "missing" in (body["error"]["details"] or {})
+    assert body["error"]["code"] == "CAPTURE_INVALID"
+    assert "missing" in (body["error"]["details"] or {})
 
 
 async def test_create_parametric_block_rejects_non_numeric(
@@ -349,6 +347,8 @@ async def test_create_parametric_block_rejects_non_numeric(
     data["raw_measurements_mm"] = json.dumps(raw)
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
     assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
 async def test_create_parametric_block_rejects_non_positive(
@@ -360,6 +360,8 @@ async def test_create_parametric_block_rejects_non_positive(
     data["raw_measurements_mm"] = json.dumps(raw)
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
     assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
 async def test_create_parametric_block_rejects_non_finite_measurement(
@@ -422,6 +424,20 @@ async def test_create_parametric_block_rejects_equivalent_knob_height(
     assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
+async def test_create_parametric_block_rejects_inner_pitch_at_least_outer_pitch(
+    app_client: AsyncIterator,
+) -> None:
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, outer_pitch_mm=16.0, inner_pitch_mm=16.0)
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
+
+
 async def test_create_parametric_block_rejects_absurd_measurement(
     app_client: AsyncIterator,
 ) -> None:
@@ -432,6 +448,8 @@ async def test_create_parametric_block_rejects_absurd_measurement(
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
 
     assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
 async def test_create_parametric_block_rejects_unknown_system(
