@@ -87,6 +87,7 @@ from api.v1.upload_limits import (
 )
 from core.errors import CaptureInvalid
 from db.models import Capture, Job
+from db.session import async_session_factory
 from models.schemas import ParametricBlockRead
 from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
 from storage.minio_client import raw_object_key, storage
@@ -176,6 +177,12 @@ def _settings_s3_bucket_raw() -> str:
     from app.config import settings
 
     return settings.s3_bucket_raw
+
+
+async def _capture_row_exists(capture_id: uuid.UUID) -> bool:
+    factory = async_session_factory()
+    async with factory() as fresh_session:
+        return await fresh_session.get(Capture, capture_id) is not None
 
 
 @router.post(
@@ -295,10 +302,14 @@ async def create_parametric_block(
             # the photo endpoint's ``raw_object_key`` prefix convention.
             key = raw_object_key(str(capture_id), filename)
             photo_bytes = await read_upload_bytes(upload, label=f"photo #{idx}")
-            validate_image_bytes(photo_bytes, label=f"photo #{idx}", content_type=upload.content_type)
+            validate_image_bytes(
+                photo_bytes, label=f"photo #{idx}", content_type=upload.content_type
+            )
             total_bytes += len(photo_bytes)
             assert_total_upload_bytes(total_bytes)
-            staged_uploads.append((key, photo_bytes, upload.content_type or "application/octet-stream"))
+            staged_uploads.append(
+                (key, photo_bytes, upload.content_type or "application/octet-stream")
+            )
     finally:
         for upload in photos_list:
             await upload.close()
@@ -350,7 +361,6 @@ async def create_parametric_block(
         )
         session.add(job)
 
-        durable_state_committed = True
         job_id = await commit_and_dispatch_reconstruct(
             session,
             capture_id=capture_id,
@@ -358,6 +368,8 @@ async def create_parametric_block(
         )
         await session.refresh(capture)
     except Exception:
+        if not durable_state_committed and await _capture_row_exists(capture_id):
+            durable_state_committed = True
         if not durable_state_committed:
             cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
         raise

@@ -1,4 +1,5 @@
 """``POST /api/v1/captures`` and ``GET /api/v1/captures/{id}``."""
+
 from __future__ import annotations
 
 import io
@@ -17,6 +18,7 @@ def _png(width: int = 4, height: int = 4) -> bytes:
     Just enough to satisfy the multipart upload — we don't decode the bytes
     on the server, we only PUT them in MinIO.
     """
+
     def chunk(tag: bytes, data: bytes) -> bytes:
         return (
             struct.pack(">I", len(data))
@@ -95,7 +97,9 @@ async def test_create_capture_rejects_later_invalid_image_without_partial_storag
 ) -> None:
     put_calls: list[tuple[object, ...]] = []
 
-    monkeypatch.setattr("api.v1.captures.storage.put_object", lambda *args, **_kwargs: put_calls.append(args))
+    monkeypatch.setattr(
+        "api.v1.captures.storage.put_object", lambda *args, **_kwargs: put_calls.append(args)
+    )
 
     files = _files(3) + [("images", ("bad.png", b"not an image", "image/png"))]
     resp = await app_client.post(
@@ -122,7 +126,9 @@ async def test_create_capture_cleans_up_stored_images_when_later_put_fails(
         return key
 
     monkeypatch.setattr("api.v1.captures.storage.put_object", fake_put_object)
-    monkeypatch.setattr("api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
 
     with pytest.raises(RuntimeError, match="storage write failed"):
         await app_client.post(
@@ -142,14 +148,17 @@ async def test_create_capture_does_not_cleanup_after_dispatch_boundary_on_refres
 
     removed_keys: list[str] = []
 
-    async def fake_dispatch(*_args: object, **_kwargs: object) -> UUID:
+    async def fake_dispatch(session: AsyncSession, *_args: object, **_kwargs: object) -> UUID:
+        await session.commit()
         return uuid4()
 
     async def fail_refresh(self: AsyncSession, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("refresh failed after dispatch")
 
     monkeypatch.setattr("api.v1.captures.commit_and_dispatch_reconstruct", fake_dispatch)
-    monkeypatch.setattr("api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
     monkeypatch.setattr(AsyncSession, "refresh", fail_refresh)
 
     with pytest.raises(RuntimeError, match="refresh failed after dispatch"):
@@ -160,6 +169,35 @@ async def test_create_capture_does_not_cleanup_after_dispatch_boundary_on_refres
         )
 
     assert removed_keys == []
+
+
+async def test_create_capture_cleans_up_when_dispatcher_fails_before_durable_commit(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stored_keys: list[str] = []
+    removed_keys: list[str] = []
+
+    async def fake_dispatch(*_args: object, **_kwargs: object) -> UUID:
+        raise RuntimeError("dispatcher failed before commit")
+
+    monkeypatch.setattr(
+        "api.v1.captures.storage.put_object",
+        lambda _bucket, key, *_args, **_kwargs: stored_keys.append(key),
+    )
+    monkeypatch.setattr(
+        "api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
+    monkeypatch.setattr("api.v1.captures.commit_and_dispatch_reconstruct", fake_dispatch)
+
+    with pytest.raises(RuntimeError, match="dispatcher failed before commit"):
+        await app_client.post(
+            "/api/v1/captures",
+            data={"part_id": "test-part-dispatch-precommit"},
+            files=_files(4),
+        )
+
+    assert set(removed_keys) == set(stored_keys)
 
 
 async def test_create_capture_does_not_cleanup_when_dispatcher_fails_after_commit(
@@ -179,7 +217,9 @@ async def test_create_capture_does_not_cleanup_when_dispatcher_fails_after_commi
         raise RuntimeError("dispatcher failed after commit")
 
     monkeypatch.setattr("api.v1.captures.commit_and_dispatch_reconstruct", fake_dispatch)
-    monkeypatch.setattr("api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
 
     with pytest.raises(RuntimeError, match="dispatcher failed after commit"):
         await app_client.post(
@@ -201,7 +241,9 @@ async def test_get_unknown_capture_returns_404(app_client: AsyncIterator) -> Non
     assert body["error"]["code"] in {"CAPTURE_NOT_FOUND", "NOT_FOUND"}
 
 
-async def test_list_captures_returns_recent_ar_capture_that_needs_measurement(app_client: AsyncIterator) -> None:
+async def test_list_captures_returns_recent_ar_capture_that_needs_measurement(
+    app_client: AsyncIterator,
+) -> None:
     from db.models import Capture
     from db.session import async_session_factory
 

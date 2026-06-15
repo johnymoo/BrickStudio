@@ -1,4 +1,5 @@
 """``/api/v1/captures`` — multipart upload + read."""
+
 from __future__ import annotations
 
 import logging
@@ -19,6 +20,7 @@ from api.v1.upload_limits import (
 )
 from core.errors import CaptureInvalid, CaptureNotFound
 from db.models import Capture, Job
+from db.session import async_session_factory
 from models.schemas import CaptureImagesRead, CaptureImageRead, CaptureRead, NeedsMeasurement
 from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
 from storage.minio_client import raw_object_key, storage
@@ -66,13 +68,16 @@ _GUIDANCE = (
 async def create_capture(
     session: DBSessionDep,
     part_id: Annotated[str, Form(min_length=1, max_length=64)],
-    images: Annotated[list[UploadFile], File(
-        description=(
-            f"Between {MIN_IMAGES} and {MAX_IMAGES} photos of the part. "
-            "8+ photos unlocks the COLMAP SfM path; 4-7 uses the "
-            "Open3D icosahedron fallback."
-        )
-    )],
+    images: Annotated[
+        list[UploadFile],
+        File(
+            description=(
+                f"Between {MIN_IMAGES} and {MAX_IMAGES} photos of the part. "
+                "8+ photos unlocks the COLMAP SfM path; 4-7 uses the "
+                "Open3D icosahedron fallback."
+            )
+        ),
+    ],
     capture_mode: Annotated[CaptureMode, Form()] = DEFAULT_CAPTURE_MODE,
 ) -> CaptureRead:
     capture_id = uuid.uuid4()
@@ -141,7 +146,6 @@ async def create_capture(
         )
         session.add(job)
 
-        durable_state_committed = True
         job_id = await commit_and_dispatch_reconstruct(
             session,
             capture_id=capture_id,
@@ -149,13 +153,19 @@ async def create_capture(
         )
         await session.refresh(capture)
     except Exception:
+        if not durable_state_committed and await _capture_row_exists(capture_id):
+            durable_state_committed = True
         if not durable_state_committed:
             cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
         raise
 
     logger.info(
         "captures.create: capture_id=%s part_id=%s images=%d mode=%s job_id=%s",
-        capture_id, part_id, len(keys), capture_mode, job_id,
+        capture_id,
+        part_id,
+        len(keys),
+        capture_mode,
+        job_id,
     )
 
     return CaptureRead(
@@ -195,7 +205,9 @@ async def get_capture(capture_id: uuid.UUID, session: DBSessionDep) -> CaptureRe
     return _capture_read(capture, job_id)
 
 
-@router.get("/{capture_id}/images", response_model=CaptureImagesRead, summary="Read raw capture image URLs")
+@router.get(
+    "/{capture_id}/images", response_model=CaptureImagesRead, summary="Read raw capture image URLs"
+)
 async def get_capture_images(capture_id: uuid.UUID, session: DBSessionDep) -> CaptureImagesRead:
     capture = await session.get(Capture, capture_id)
     if capture is None:
@@ -212,7 +224,9 @@ async def get_capture_images(capture_id: uuid.UUID, session: DBSessionDep) -> Ca
     return CaptureImagesRead(capture_id=capture.id, images=images)
 
 
-async def _latest_job_ids(session: DBSessionDep, capture_ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+async def _latest_job_ids(
+    session: DBSessionDep, capture_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, uuid.UUID]:
     if not capture_ids:
         return {}
     ranked_jobs = (
@@ -281,3 +295,9 @@ def settings_s3_bucket_raw() -> str:  # tiny local helper to keep `storage.put_o
     from app.config import settings
 
     return settings.s3_bucket_raw
+
+
+async def _capture_row_exists(capture_id: uuid.UUID) -> bool:
+    factory = async_session_factory()
+    async with factory() as fresh_session:
+        return await fresh_session.get(Capture, capture_id) is not None

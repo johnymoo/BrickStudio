@@ -14,6 +14,7 @@ endpoint runs :func:`services.brick_recognizer.recognize_brick`
   5 caliper fields + guidance so the client falls back to
   ``POST /parametric-blocks``.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,9 +34,11 @@ from api.v1.upload_limits import (
     read_upload_bytes,
     validate_depth_png_bytes,
     validate_image_bytes,
+    validate_png_image_bytes,
 )
 from core.errors import CaptureInvalid
 from db.models import Capture, Job
+from db.session import async_session_factory
 from models.schemas import ArCaptureRead, NeedsMeasurement, RecognizedBlock
 from services.brick_recognizer import recognize_brick
 from services.reconstruct_dispatcher import commit_and_dispatch_reconstruct
@@ -82,25 +85,41 @@ def _settings_s3_bucket_raw() -> str:
     return _s.s3_bucket_raw
 
 
+async def _capture_row_exists(capture_id: uuid.UUID) -> bool:
+    factory = async_session_factory()
+    async with factory() as fresh_session:
+        return await fresh_session.get(Capture, capture_id) is not None
+
+
 @router.post(
     "",
     response_model=ArCaptureRead,
     status_code=status.HTTP_201_CREATED,
     summary="Upload an ARCore capture (top-down stud frame + depth + photos) and recognize it",
     responses={
-        201: {"description": "Capture created; recognized → GLB job dispatched, else needs_measurement."},
-        422: {"description": "Validation failed (bad image count, bad ar_metadata JSON, empty frame)."},
+        201: {
+            "description": "Capture created; recognized → GLB job dispatched, else needs_measurement."
+        },
+        422: {
+            "description": "Validation failed (bad image count, bad ar_metadata JSON, empty frame)."
+        },
     },
 )
 async def create_ar_capture(
     session: DBSessionDep,
     kind: Annotated[Kind, Form()],
     recognition_rgb: Annotated[UploadFile, File(description="Top-down RGB of the stud face.")],
-    recognition_depth: Annotated[UploadFile, File(description="DEPTH16 of the same frame as a 16-bit PNG.")],
-    ar_metadata: Annotated[str, Form(description="JSON: intrinsics, depth dims, pose, distance, coarse hints.")],
+    recognition_depth: Annotated[
+        UploadFile, File(description="DEPTH16 of the same frame as a 16-bit PNG.")
+    ],
+    ar_metadata: Annotated[
+        str, Form(description="JSON: intrinsics, depth dims, pose, distance, coarse hints.")
+    ],
     images: Annotated[
         list[UploadFile],
-        File(description=f"{MIN_IMAGES}-{MAX_IMAGES} angle photos (compat with photo path / future)."),
+        File(
+            description=f"{MIN_IMAGES}-{MAX_IMAGES} angle photos (compat with photo path / future)."
+        ),
     ] = [],  # noqa: B006 — FastAPI's Annotated/File idiom for a file list
     system_hint: Annotated[SystemHint | None, Form()] = None,
     part_id: Annotated[str | None, Form(max_length=64)] = None,
@@ -124,7 +143,9 @@ async def create_ar_capture(
                 details={"line": exc.lineno, "column": exc.colno},
             ) from exc
         if not isinstance(meta, dict):
-            raise CaptureInvalid("ar_metadata must be a JSON object", details={"got_type": type(meta).__name__})
+            raise CaptureInvalid(
+                "ar_metadata must be a JSON object", details={"got_type": type(meta).__name__}
+            )
 
         # ---- 3. Read recognition frame + angle bytes ------------------------
         rgb_ext = extension_for_allowed_upload(
@@ -133,9 +154,13 @@ async def create_ar_capture(
             allowed_content_types={"image/png": "png"},
         )
         rgb_bytes = await read_upload_bytes(recognition_rgb, label="recognition_rgb")
-        validate_image_bytes(rgb_bytes, label="recognition_rgb", content_type=recognition_rgb.content_type)
+        validate_png_image_bytes(
+            rgb_bytes, label="recognition_rgb", content_type=recognition_rgb.content_type
+        )
         depth_bytes = await read_upload_bytes(recognition_depth, label="recognition_depth")
-        validate_depth_png_bytes(depth_bytes, label="recognition_depth", content_type=recognition_depth.content_type)
+        validate_depth_png_bytes(
+            depth_bytes, label="recognition_depth", content_type=recognition_depth.content_type
+        )
         total_bytes = len(rgb_bytes) + len(depth_bytes)
         assert_total_upload_bytes(total_bytes)
 
@@ -217,9 +242,14 @@ async def create_ar_capture(
         # ---- 8. Dispatch a GLB job only when recognized ---------------------
         job_id: uuid.UUID | None = None
         if recognized:
-            job = Job(capture_id=capture_id, kind="reconstruct", status="pending", progress=0, stage="queued")
+            job = Job(
+                capture_id=capture_id,
+                kind="reconstruct",
+                status="pending",
+                progress=0,
+                stage="queued",
+            )
             session.add(job)
-            durable_state_committed = True
             job_id = await commit_and_dispatch_reconstruct(
                 session,
                 capture_id=capture_id,
@@ -230,6 +260,8 @@ async def create_ar_capture(
         durable_state_committed = True
         await session.refresh(capture)
     except Exception:
+        if not durable_state_committed and await _capture_row_exists(capture_id):
+            durable_state_committed = True
         if not durable_state_committed:
             cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
         raise
@@ -237,8 +269,15 @@ async def create_ar_capture(
     logger.info(
         "ar_captures.create: capture_id=%s part_id=%s recognized=%s system=%s units=%sx%s "
         "pitch=%s conf=%s job_id=%s",
-        capture_id, part_id, recognized, result.system, result.units_x, result.units_y,
-        result.pitch_mm, result.confidence, job_id,
+        capture_id,
+        part_id,
+        recognized,
+        result.system,
+        result.units_x,
+        result.units_y,
+        result.pitch_mm,
+        result.confidence,
+        job_id,
     )
 
     body = ArCaptureRead(

@@ -183,7 +183,10 @@ async def test_create_parametric_block_rejects_later_invalid_photo_without_parti
     data, files = _multipart_with_photos(2)
     files.append(("photos", ("bad.png", b"not an image", "image/png")))
 
-    monkeypatch.setattr("api.v1.parametric_blocks.storage.put_object", lambda *args, **_kwargs: put_calls.append(args))
+    monkeypatch.setattr(
+        "api.v1.parametric_blocks.storage.put_object",
+        lambda *args, **_kwargs: put_calls.append(args),
+    )
 
     resp = await app_client.post(
         "/api/v1/parametric-blocks",
@@ -210,7 +213,10 @@ async def test_create_parametric_block_cleans_up_stored_photos_when_later_put_fa
         return key
 
     monkeypatch.setattr("api.v1.parametric_blocks.storage.put_object", fake_put_object)
-    monkeypatch.setattr("api.v1.parametric_blocks.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.parametric_blocks.storage.remove_object",
+        lambda _bucket, key: removed_keys.append(key),
+    )
 
     with pytest.raises(RuntimeError, match="storage write failed"):
         await app_client.post(
@@ -231,14 +237,18 @@ async def test_create_parametric_block_does_not_cleanup_after_dispatch_boundary_
     removed_keys: list[str] = []
     data, files = _multipart_with_photos(1)
 
-    async def fake_dispatch(*_args: object, **_kwargs: object) -> uuid.UUID:
+    async def fake_dispatch(session: AsyncSession, *_args: object, **_kwargs: object) -> uuid.UUID:
+        await session.commit()
         return uuid.uuid4()
 
     async def fail_refresh(self: AsyncSession, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("refresh failed after dispatch")
 
     monkeypatch.setattr("api.v1.parametric_blocks.commit_and_dispatch_reconstruct", fake_dispatch)
-    monkeypatch.setattr("api.v1.parametric_blocks.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.parametric_blocks.storage.remove_object",
+        lambda _bucket, key: removed_keys.append(key),
+    )
     monkeypatch.setattr(AsyncSession, "refresh", fail_refresh)
 
     with pytest.raises(RuntimeError, match="refresh failed after dispatch"):
@@ -269,7 +279,10 @@ async def test_create_parametric_block_does_not_cleanup_when_dispatcher_fails_af
         raise RuntimeError("dispatcher failed after commit")
 
     monkeypatch.setattr("api.v1.parametric_blocks.commit_and_dispatch_reconstruct", fake_dispatch)
-    monkeypatch.setattr("api.v1.parametric_blocks.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.parametric_blocks.storage.remove_object",
+        lambda _bucket, key: removed_keys.append(key),
+    )
 
     with pytest.raises(RuntimeError, match="dispatcher failed after commit"):
         await app_client.post(
@@ -691,14 +704,10 @@ def test_parametric_capture_auto_promotes_to_part(
         f = async_session_factory()
         async with f() as session:
             part = (
-                await session.scalars(
-                    select(Part).where(Part.capture_id == uuid.UUID(capture_id))
-                )
+                await session.scalars(select(Part).where(Part.capture_id == uuid.UUID(capture_id)))
             ).one_or_none()
             job = (
-                await session.scalars(
-                    select(Job).where(Job.capture_id == uuid.UUID(capture_id))
-                )
+                await session.scalars(select(Job).where(Job.capture_id == uuid.UUID(capture_id)))
             ).first()
             assets = []
             if job:

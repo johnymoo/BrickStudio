@@ -1,4 +1,5 @@
 """Bounded upload helpers for capture routes."""
+
 from __future__ import annotations
 
 import io
@@ -101,6 +102,49 @@ def validate_image_bytes(
         ) from exc
 
 
+def validate_png_image_bytes(
+    body: bytes,
+    *,
+    label: str,
+    content_type: str | None,
+) -> None:
+    """Validate that uploaded bytes decode as a PNG image and are not a pixel bomb."""
+
+    if (content_type or "").lower() != "image/png":
+        raise CaptureInvalid(
+            f"{label} must be a PNG image",
+            details={"content_type": content_type},
+        )
+
+    try:
+        with Image.open(io.BytesIO(body)) as image:
+            if image.format != "PNG":
+                raise CaptureInvalid(
+                    f"{label} must be a PNG image",
+                    details={"content_type": content_type, "format": image.format},
+                )
+            width, height = image.size
+            pixels = width * height
+            if pixels > settings.max_image_pixels:
+                raise CaptureInvalid(
+                    f"{label} has too many pixels",
+                    details={
+                        "max_pixels": settings.max_image_pixels,
+                        "actual_pixels": pixels,
+                        "width": width,
+                        "height": height,
+                    },
+                )
+            image.verify()
+    except CaptureInvalid:
+        raise
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
+        raise CaptureInvalid(
+            f"{label} is an invalid image",
+            details={"content_type": content_type},
+        ) from exc
+
+
 def validate_depth_png_bytes(
     body: bytes,
     *,
@@ -162,4 +206,5 @@ __all__ = [
     "read_upload_bytes",
     "validate_depth_png_bytes",
     "validate_image_bytes",
+    "validate_png_image_bytes",
 ]

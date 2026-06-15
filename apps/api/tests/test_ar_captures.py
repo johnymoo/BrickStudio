@@ -1,4 +1,5 @@
 """Endpoint tests for POST /api/v1/ar-captures."""
+
 from __future__ import annotations
 
 import asyncio
@@ -15,9 +16,24 @@ import trimesh
 from fixtures.synth_studs import make_ar_bundle
 
 
+def _jpeg() -> bytes:
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (4, 4), (255, 128, 0)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
 def _png(width: int = 4, height: int = 4, color: bytes = b"\xff\x80\x00") -> bytes:
     def chunk(tag: bytes, data: bytes) -> bytes:
-        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        return (
+            struct.pack(">I", len(data))
+            + tag
+            + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        )
 
     sig = b"\x89PNG\r\n\x1a\n"
     ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
@@ -67,7 +83,9 @@ async def test_ar_capture_unknown_hint_needs_measurement(app_client: AsyncIterat
     assert "outer_pitch_mm" in body["needs_measurement"]["fields"]
 
 
-async def test_ar_capture_needs_measurement_is_visible_from_capture_detail(app_client: AsyncIterator) -> None:
+async def test_ar_capture_needs_measurement_is_visible_from_capture_detail(
+    app_client: AsyncIterator,
+) -> None:
     from db.models import Capture
     from db.session import async_session_factory
 
@@ -163,10 +181,32 @@ async def test_ar_capture_rejects_rgb_png_as_recognition_depth(app_client: Async
     assert "recognition_depth" in resp.text
 
 
-async def test_ar_capture_rejects_unsupported_recognition_rgb_content_type(app_client: AsyncIterator) -> None:
+async def test_ar_capture_rejects_unsupported_recognition_rgb_content_type(
+    app_client: AsyncIterator,
+) -> None:
     rgb, depth, meta = make_ar_bundle("feile")
     files = [
         ("recognition_rgb", ("rgb.svg", rgb, "image/svg+xml")),
+        ("recognition_depth", ("depth.png", depth, "image/png")),
+    ]
+    files += [("images", (f"{i}.png", _png(), "image/png")) for i in range(4)]
+
+    resp = await app_client.post(
+        "/api/v1/ar-captures",
+        data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+        files=files,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert "recognition_rgb" in resp.text
+
+
+async def test_ar_capture_rejects_recognition_rgb_that_is_not_decoded_png(
+    app_client: AsyncIterator,
+) -> None:
+    _rgb, depth, meta = make_ar_bundle("feile")
+    files = [
+        ("recognition_rgb", ("rgb.png", _jpeg(), "image/png")),
         ("recognition_depth", ("depth.png", depth, "image/png")),
     ]
     files += [("images", (f"{i}.png", _png(), "image/png")) for i in range(4)]
@@ -193,7 +233,9 @@ async def test_ar_capture_rejects_later_invalid_angle_without_recognition_or_sto
         recognize_calls.append(args)
         raise AssertionError("recognize_brick should not be called")
 
-    monkeypatch.setattr("api.v1.ar_captures.storage.put_object", lambda *args, **_kwargs: put_calls.append(args))
+    monkeypatch.setattr(
+        "api.v1.ar_captures.storage.put_object", lambda *args, **_kwargs: put_calls.append(args)
+    )
     monkeypatch.setattr("api.v1.ar_captures.recognize_brick", fail_if_called)
 
     files = _files(rgb, depth, n_images=3)
@@ -224,9 +266,41 @@ async def test_ar_capture_cleans_up_stored_raw_objects_when_later_put_fails(
         return key
 
     monkeypatch.setattr("api.v1.ar_captures.storage.put_object", fake_put_object)
-    monkeypatch.setattr("api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
 
     with pytest.raises(RuntimeError, match="storage write failed"):
+        await app_client.post(
+            "/api/v1/ar-captures",
+            data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+            files=_files(rgb, depth),
+        )
+
+    assert set(removed_keys) == set(stored_keys)
+
+
+async def test_ar_capture_cleans_up_when_dispatcher_fails_before_durable_commit(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rgb, depth, meta = make_ar_bundle("feile")
+    stored_keys: list[str] = []
+    removed_keys: list[str] = []
+
+    async def fake_dispatch(*_args: object, **_kwargs: object) -> uuid.UUID:
+        raise RuntimeError("dispatcher failed before commit")
+
+    monkeypatch.setattr(
+        "api.v1.ar_captures.storage.put_object",
+        lambda _bucket, key, *_args, **_kwargs: stored_keys.append(key),
+    )
+    monkeypatch.setattr(
+        "api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
+    monkeypatch.setattr("api.v1.ar_captures.commit_and_dispatch_reconstruct", fake_dispatch)
+
+    with pytest.raises(RuntimeError, match="dispatcher failed before commit"):
         await app_client.post(
             "/api/v1/ar-captures",
             data={"kind": "brick", "ar_metadata": json.dumps(meta)},
@@ -248,7 +322,9 @@ async def test_ar_capture_does_not_cleanup_after_needs_measurement_commit_bounda
     async def fail_refresh(self: AsyncSession, *_args: object, **_kwargs: object) -> None:
         raise RuntimeError("refresh failed after commit")
 
-    monkeypatch.setattr("api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
     monkeypatch.setattr(AsyncSession, "refresh", fail_refresh)
 
     with pytest.raises(RuntimeError, match="refresh failed after commit"):
@@ -279,7 +355,9 @@ async def test_ar_capture_does_not_cleanup_when_dispatcher_fails_after_commit(
         raise RuntimeError("dispatcher failed after commit")
 
     monkeypatch.setattr("api.v1.ar_captures.commit_and_dispatch_reconstruct", fake_dispatch)
-    monkeypatch.setattr("api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(
+        "api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key)
+    )
 
     with pytest.raises(RuntimeError, match="dispatcher failed after commit"):
         await app_client.post(
