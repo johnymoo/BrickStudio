@@ -351,6 +351,21 @@ async def test_create_parametric_block_rejects_non_numeric(
     assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
+async def test_create_parametric_block_rejects_boolean_measurement(
+    app_client: AsyncIterator,
+) -> None:
+    """JSON booleans are not valid measurement values."""
+    data = _multipart_no_photos()
+    raw = dict(DUPLO_2X2_RAW, stud_diameter_mm=True)
+    data["raw_measurements_mm"] = json.dumps(raw)
+
+    resp = await app_client.post("/api/v1/parametric-blocks", data=data)
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["error"]["code"] == "CAPTURE_INVALID"
+
+
 async def test_create_parametric_block_rejects_non_positive(
     app_client: AsyncIterator,
 ) -> None:
@@ -364,11 +379,17 @@ async def test_create_parametric_block_rejects_non_positive(
     assert body["error"]["code"] == "CAPTURE_INVALID"
 
 
+@pytest.mark.parametrize(
+    ("value", "detail_value"),
+    [(1e309, "inf"), (-1e309, "-inf")],
+)
 async def test_create_parametric_block_rejects_non_finite_measurement(
     app_client: AsyncIterator,
+    value: float,
+    detail_value: str,
 ) -> None:
     data = _multipart_no_photos()
-    raw = dict(DUPLO_2X2_RAW, stud_diameter_mm=1e309)
+    raw = dict(DUPLO_2X2_RAW, stud_diameter_mm=value)
     data["raw_measurements_mm"] = json.dumps(raw)
 
     resp = await app_client.post("/api/v1/parametric-blocks", data=data)
@@ -377,7 +398,7 @@ async def test_create_parametric_block_rejects_non_finite_measurement(
     body = resp.json()
     assert body["error"]["code"] == "CAPTURE_INVALID"
     assert body["error"]["details"]["key"] == "stud_diameter_mm"
-    assert body["error"]["details"]["value"] == "inf"
+    assert body["error"]["details"]["value"] == detail_value
 
 
 async def test_create_parametric_block_rejects_nan_measurement(

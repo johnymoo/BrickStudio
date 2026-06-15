@@ -304,6 +304,11 @@ async def create_parametric_block(
         raw: dict[str, float] = {}
         for k in _RAW_KEYS:
             v = raw_obj[k]
+            if isinstance(v, bool):
+                raise CaptureInvalid(
+                    f"raw_measurements_mm.{k} is not numeric: {v!r}",
+                    details={"key": k, "value": v},
+                )
             try:
                 v_f = float(v)
             except (TypeError, ValueError) as exc:
