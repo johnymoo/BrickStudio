@@ -277,26 +277,33 @@ async def create_parametric_block(
     # is stable (and so the no-photos path still has a valid id).
     capture_id = uuid.uuid4()
     keys: list[str] = []
-    total_bytes = 0
-    for idx, upload in enumerate(photos_list):
-        ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
-        filename = f"ref_{idx:03d}.{ext}"
-        # Use a per-capture prefix under a parametric/ sub-tree so
-        # the bucket listing is easy to scope. The key shape mirrors
-        # the photo endpoint's ``raw_object_key`` prefix convention.
-        key = raw_object_key(str(capture_id), filename)
-        photo_bytes = await read_upload_bytes(upload, label=f"photo #{idx}")
-        validate_image_bytes(photo_bytes, label=f"photo #{idx}", content_type=upload.content_type)
-        total_bytes += len(photo_bytes)
-        assert_total_upload_bytes(total_bytes)
+    staged_uploads: list[tuple[str, bytes, str]] = []
+    try:
+        total_bytes = 0
+        for idx, upload in enumerate(photos_list):
+            ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
+            filename = f"ref_{idx:03d}.{ext}"
+            # Use a per-capture prefix under a parametric/ sub-tree so
+            # the bucket listing is easy to scope. The key shape mirrors
+            # the photo endpoint's ``raw_object_key`` prefix convention.
+            key = raw_object_key(str(capture_id), filename)
+            photo_bytes = await read_upload_bytes(upload, label=f"photo #{idx}")
+            validate_image_bytes(photo_bytes, label=f"photo #{idx}", content_type=upload.content_type)
+            total_bytes += len(photo_bytes)
+            assert_total_upload_bytes(total_bytes)
+            staged_uploads.append((key, photo_bytes, upload.content_type or "application/octet-stream"))
+    finally:
+        for upload in photos_list:
+            await upload.close()
+
+    for key, photo_bytes, content_type in staged_uploads:
         storage.put_object(
             _settings_s3_bucket_raw(),
             key,
             photo_bytes,
-            content_type=upload.content_type or "application/octet-stream",
+            content_type=content_type,
         )
         keys.append(key)
-        await upload.close()
 
     # ---- 5. Persist capture row -------------------------------------------
     capture = Capture(

@@ -83,23 +83,30 @@ async def create_capture(
 
     capture_id = uuid.uuid4()
     keys: list[str] = []
-    total_bytes = 0
-    for idx, upload in enumerate(images):
-        ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
-        filename = f"{idx:03d}.{ext}"
-        key = raw_object_key(str(capture_id), filename)
-        body = await read_upload_bytes(upload, label=f"image #{idx}")
-        validate_image_bytes(body, label=f"image #{idx}", content_type=upload.content_type)
-        total_bytes += len(body)
-        assert_total_upload_bytes(total_bytes)
+    staged_uploads: list[tuple[str, bytes, str]] = []
+    try:
+        total_bytes = 0
+        for idx, upload in enumerate(images):
+            ext = ALLOWED_CONTENT_TYPES.get((upload.content_type or "").lower(), "bin")
+            filename = f"{idx:03d}.{ext}"
+            key = raw_object_key(str(capture_id), filename)
+            body = await read_upload_bytes(upload, label=f"image #{idx}")
+            validate_image_bytes(body, label=f"image #{idx}", content_type=upload.content_type)
+            total_bytes += len(body)
+            assert_total_upload_bytes(total_bytes)
+            staged_uploads.append((key, body, upload.content_type or "application/octet-stream"))
+    finally:
+        for upload in images:
+            await upload.close()
+
+    for key, body, content_type in staged_uploads:
         storage.put_object(
             settings_s3_bucket_raw(),
             key,
             body,
-            content_type=upload.content_type or "application/octet-stream",
+            content_type=content_type,
         )
         keys.append(key)
-        await upload.close()
 
     # Persist capture row.
     capture = Capture(

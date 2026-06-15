@@ -70,3 +70,18 @@ async def test_validate_image_bytes_accepts_small_png() -> None:
     from api.v1.upload_limits import validate_image_bytes
 
     validate_image_bytes(_png(), label="recognition_rgb", content_type="image/png")
+
+
+async def test_validate_image_bytes_rejects_over_pixel_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    from api.v1 import upload_limits
+
+    monkeypatch.setattr(
+        upload_limits,
+        "settings",
+        upload_limits.settings.model_copy(update={"max_image_pixels": 15}),
+    )
+
+    with pytest.raises(CaptureInvalid) as exc:
+        upload_limits.validate_image_bytes(_png(width=4, height=4), label="recognition_rgb", content_type="image/png")
+
+    assert "too many pixels" in str(exc.value)

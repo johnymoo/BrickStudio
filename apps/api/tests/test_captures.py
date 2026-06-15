@@ -89,6 +89,25 @@ async def test_get_capture_returns_200(app_client: AsyncIterator) -> None:
     assert body["status"] in {"pending", "running", "completed", "failed"}
 
 
+async def test_create_capture_rejects_later_invalid_image_without_partial_storage(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    put_calls: list[tuple[object, ...]] = []
+
+    monkeypatch.setattr("api.v1.captures.storage.put_object", lambda *args, **_kwargs: put_calls.append(args))
+
+    files = _files(3) + [("images", ("bad.png", b"not an image", "image/png"))]
+    resp = await app_client.post(
+        "/api/v1/captures",
+        data={"part_id": "test-part-invalid-late"},
+        files=files,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert put_calls == []
+
+
 async def test_get_unknown_capture_returns_404(app_client: AsyncIterator) -> None:
     import uuid
 

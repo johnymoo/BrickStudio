@@ -41,11 +41,24 @@ def validate_image_bytes(
 ) -> None:
     """Validate that uploaded bytes are an image and not a pixel bomb."""
 
-    Image.MAX_IMAGE_PIXELS = settings.max_image_pixels
     try:
         with Image.open(io.BytesIO(body)) as image:
+            width, height = image.size
+            pixels = width * height
+            if pixels > settings.max_image_pixels:
+                raise CaptureInvalid(
+                    f"{label} has too many pixels",
+                    details={
+                        "max_pixels": settings.max_image_pixels,
+                        "actual_pixels": pixels,
+                        "width": width,
+                        "height": height,
+                    },
+                )
             image.verify()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+    except CaptureInvalid:
+        raise
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
         raise CaptureInvalid(
             f"{label} is an invalid image",
             details={"content_type": content_type},

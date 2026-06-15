@@ -151,6 +151,34 @@ async def test_ar_capture_rejects_too_few_images(app_client: AsyncIterator) -> N
     assert resp.status_code == 422, resp.text
 
 
+async def test_ar_capture_rejects_later_invalid_angle_without_recognition_or_storage(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rgb, depth, meta = make_ar_bundle("feile")
+    put_calls: list[tuple[object, ...]] = []
+    recognize_calls: list[tuple[object, ...]] = []
+
+    def fail_if_called(*args, **kwargs):
+        recognize_calls.append(args)
+        raise AssertionError("recognize_brick should not be called")
+
+    monkeypatch.setattr("api.v1.ar_captures.storage.put_object", lambda *args, **_kwargs: put_calls.append(args))
+    monkeypatch.setattr("api.v1.ar_captures.recognize_brick", fail_if_called)
+
+    files = _files(rgb, depth, n_images=3)
+    files.append(("images", ("bad.png", b"not an image", "image/png")))
+    resp = await app_client.post(
+        "/api/v1/ar-captures",
+        data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+        files=files,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert put_calls == []
+    assert recognize_calls == []
+
+
 # ---------------------------------------------------------------------------
 # Fixtures for e2e tests
 # ---------------------------------------------------------------------------

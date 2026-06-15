@@ -175,6 +175,26 @@ async def test_create_parametric_block_with_3_photos_returns_201(
     assert body["mode"] == "parametric_block"
 
 
+async def test_create_parametric_block_rejects_later_invalid_photo_without_partial_storage(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    put_calls: list[tuple[object, ...]] = []
+    data, files = _multipart_with_photos(2)
+    files.append(("photos", ("bad.png", b"not an image", "image/png")))
+
+    monkeypatch.setattr("api.v1.parametric_blocks.storage.put_object", lambda *args, **_kwargs: put_calls.append(args))
+
+    resp = await app_client.post(
+        "/api/v1/parametric-blocks",
+        data=data,
+        files=files,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert put_calls == []
+
+
 async def test_create_parametric_block_with_21_photos_returns_422(
     app_client: AsyncIterator,
 ) -> None:
