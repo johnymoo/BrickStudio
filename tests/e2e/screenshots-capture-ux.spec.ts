@@ -164,4 +164,3 @@ test.describe("capture-ux screenshots", () => {
     test.info().annotations.push({ type: "screenshot", description: out });
   });
 });
-
