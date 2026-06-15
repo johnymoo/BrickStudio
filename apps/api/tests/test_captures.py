@@ -108,6 +108,32 @@ async def test_create_capture_rejects_later_invalid_image_without_partial_storag
     assert put_calls == []
 
 
+async def test_create_capture_cleans_up_stored_images_when_later_put_fails(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stored_keys: list[str] = []
+    removed_keys: list[str] = []
+
+    def fake_put_object(_bucket: str, key: str, *_args: object, **_kwargs: object) -> str:
+        if len(stored_keys) == 2:
+            raise RuntimeError("storage write failed")
+        stored_keys.append(key)
+        return key
+
+    monkeypatch.setattr("api.v1.captures.storage.put_object", fake_put_object)
+    monkeypatch.setattr("api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+
+    with pytest.raises(RuntimeError, match="storage write failed"):
+        await app_client.post(
+            "/api/v1/captures",
+            data={"part_id": "test-part-storage-cleanup"},
+            files=_files(4),
+        )
+
+    assert set(removed_keys) == set(stored_keys)
+
+
 async def test_get_unknown_capture_returns_404(app_client: AsyncIterator) -> None:
     import uuid
 

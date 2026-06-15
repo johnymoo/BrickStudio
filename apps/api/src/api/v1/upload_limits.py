@@ -52,6 +52,14 @@ def extension_for_allowed_upload(
     return allowed_content_types[content_type]
 
 
+def cleanup_stored_uploads(bucket: str, keys: list[str], remove_object: object) -> None:
+    for key in reversed(keys):
+        try:
+            remove_object(bucket, key)  # type: ignore[misc]
+        except Exception:
+            continue
+
+
 def validate_image_bytes(
     body: bytes,
     *,
@@ -84,6 +92,52 @@ def validate_image_bytes(
         ) from exc
 
 
+def validate_depth_png_bytes(
+    body: bytes,
+    *,
+    label: str,
+    content_type: str | None,
+) -> None:
+    if (content_type or "").lower() != "image/png":
+        raise CaptureInvalid(
+            f"{label} must be a PNG depth image",
+            details={"content_type": content_type},
+        )
+
+    try:
+        with Image.open(io.BytesIO(body)) as image:
+            if image.format != "PNG":
+                raise CaptureInvalid(
+                    f"{label} must be a PNG depth image",
+                    details={"content_type": content_type, "format": image.format},
+                )
+            width, height = image.size
+            pixels = width * height
+            if pixels > settings.max_image_pixels:
+                raise CaptureInvalid(
+                    f"{label} has too many pixels",
+                    details={
+                        "max_pixels": settings.max_image_pixels,
+                        "actual_pixels": pixels,
+                        "width": width,
+                        "height": height,
+                    },
+                )
+            if image.mode not in {"I;16", "I;16B", "I;16L", "I"}:
+                raise CaptureInvalid(
+                    f"{label} must be a single-channel depth image",
+                    details={"mode": image.mode, "content_type": content_type},
+                )
+            image.verify()
+    except CaptureInvalid:
+        raise
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
+        raise CaptureInvalid(
+            f"{label} is an invalid depth image",
+            details={"content_type": content_type},
+        ) from exc
+
+
 def assert_total_upload_bytes(total: int) -> None:
     if total > settings.max_upload_total_bytes:
         raise CaptureInvalid(
@@ -94,7 +148,9 @@ def assert_total_upload_bytes(total: int) -> None:
 
 __all__ = [
     "assert_total_upload_bytes",
+    "cleanup_stored_uploads",
     "extension_for_allowed_upload",
     "read_upload_bytes",
+    "validate_depth_png_bytes",
     "validate_image_bytes",
 ]

@@ -80,6 +80,7 @@ from fastapi.responses import JSONResponse
 from app.deps import DBSessionDep
 from api.v1.upload_limits import (
     assert_total_upload_bytes,
+    cleanup_stored_uploads,
     extension_for_allowed_upload,
     read_upload_bytes,
     validate_image_bytes,
@@ -105,7 +106,6 @@ ALLOWED_CONTENT_TYPES = {
     "image/jpg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
-    "image/heic": "heic",
 }
 
 # Mirrors the public surface of tools/measure_block.py so the route
@@ -305,56 +305,61 @@ async def create_parametric_block(
         for upload in photos_list:
             await upload.close()
 
-    for key, photo_bytes, content_type in staged_uploads:
-        storage.put_object(
-            _settings_s3_bucket_raw(),
-            key,
-            photo_bytes,
-            content_type=content_type,
+    raw_bucket = _settings_s3_bucket_raw()
+    try:
+        for key, photo_bytes, content_type in staged_uploads:
+            storage.put_object(
+                raw_bucket,
+                key,
+                photo_bytes,
+                content_type=content_type,
+            )
+            keys.append(key)
+
+        # ---- 5. Persist capture row -------------------------------------------
+        capture = Capture(
+            id=capture_id,
+            part_id=part_id,
+            status="pending",
+            # ``image_count`` is reused for the count of reference photos
+            # so the schema doesn't grow a new column.
+            image_count=len(keys),
+            image_keys=keys,
+            capture_mode="parametric_block",  # phase-2 column; keeps the
+            #                                   PWA happy with a non-null
+            #                                   value.
+            # ---- v0.3 parametric columns (model 0003) ----
+            mode="parametric_block",
+            system=system,
+            kind=kind,
+            units_x=units_x,
+            units_y=units_y,
+            raw_measurements_mm=raw,
+            derived_spec_mm=derived,
+            cross_check_warnings=cross_warnings,
         )
-        keys.append(key)
+        session.add(capture)
 
-    # ---- 5. Persist capture row -------------------------------------------
-    capture = Capture(
-        id=capture_id,
-        part_id=part_id,
-        status="pending",
-        # ``image_count`` is reused for the count of reference photos
-        # so the schema doesn't grow a new column.
-        image_count=len(keys),
-        image_keys=keys,
-        capture_mode="parametric_block",  # phase-2 column; keeps the
-        #                                   PWA happy with a non-null
-        #                                   value.
-        # ---- v0.3 parametric columns (model 0003) ----
-        mode="parametric_block",
-        system=system,
-        kind=kind,
-        units_x=units_x,
-        units_y=units_y,
-        raw_measurements_mm=raw,
-        derived_spec_mm=derived,
-        cross_check_warnings=cross_warnings,
-    )
-    session.add(capture)
+        # ---- 6. Pre-create job row + dispatch --------------------------------
+        job = Job(
+            capture_id=capture_id,
+            kind="reconstruct",  # same task as the photo path; the worker
+            #                       dispatches on capture.mode.
+            status="pending",
+            progress=0,
+            stage="queued",
+        )
+        session.add(job)
 
-    # ---- 6. Pre-create job row + dispatch --------------------------------
-    job = Job(
-        capture_id=capture_id,
-        kind="reconstruct",  # same task as the photo path; the worker
-        #                       dispatches on capture.mode.
-        status="pending",
-        progress=0,
-        stage="queued",
-    )
-    session.add(job)
-
-    job_id = await commit_and_dispatch_reconstruct(
-        session,
-        capture_id=capture_id,
-        job=job,
-    )
-    await session.refresh(capture)
+        job_id = await commit_and_dispatch_reconstruct(
+            session,
+            capture_id=capture_id,
+            job=job,
+        )
+        await session.refresh(capture)
+    except Exception:
+        cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
+        raise
 
     logger.info(
         "parametric_blocks.create: capture_id=%s part_id=%s system=%s kind=%s "

@@ -195,6 +195,33 @@ async def test_create_parametric_block_rejects_later_invalid_photo_without_parti
     assert put_calls == []
 
 
+async def test_create_parametric_block_cleans_up_stored_photos_when_later_put_fails(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stored_keys: list[str] = []
+    removed_keys: list[str] = []
+    data, files = _multipart_with_photos(3)
+
+    def fake_put_object(_bucket: str, key: str, *_args: object, **_kwargs: object) -> str:
+        if len(stored_keys) == 1:
+            raise RuntimeError("storage write failed")
+        stored_keys.append(key)
+        return key
+
+    monkeypatch.setattr("api.v1.parametric_blocks.storage.put_object", fake_put_object)
+    monkeypatch.setattr("api.v1.parametric_blocks.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+
+    with pytest.raises(RuntimeError, match="storage write failed"):
+        await app_client.post(
+            "/api/v1/parametric-blocks",
+            data=data,
+            files=files,
+        )
+
+    assert set(removed_keys) == set(stored_keys)
+
+
 async def test_create_parametric_block_with_21_photos_returns_422(
     app_client: AsyncIterator,
 ) -> None:

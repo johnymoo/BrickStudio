@@ -151,6 +151,18 @@ async def test_ar_capture_rejects_too_few_images(app_client: AsyncIterator) -> N
     assert resp.status_code == 422, resp.text
 
 
+async def test_ar_capture_rejects_rgb_png_as_recognition_depth(app_client: AsyncIterator) -> None:
+    rgb, _depth, meta = make_ar_bundle("feile")
+    resp = await app_client.post(
+        "/api/v1/ar-captures",
+        data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+        files=_files(rgb, _png()),
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert "recognition_depth" in resp.text
+
+
 async def test_ar_capture_rejects_later_invalid_angle_without_recognition_or_storage(
     app_client: AsyncIterator,
     monkeypatch: pytest.MonkeyPatch,
@@ -177,6 +189,33 @@ async def test_ar_capture_rejects_later_invalid_angle_without_recognition_or_sto
     assert resp.status_code == 422, resp.text
     assert put_calls == []
     assert recognize_calls == []
+
+
+async def test_ar_capture_cleans_up_stored_raw_objects_when_later_put_fails(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rgb, depth, meta = make_ar_bundle("feile")
+    stored_keys: list[str] = []
+    removed_keys: list[str] = []
+
+    def fake_put_object(_bucket: str, key: str, *_args: object, **_kwargs: object) -> str:
+        if len(stored_keys) == 2:
+            raise RuntimeError("storage write failed")
+        stored_keys.append(key)
+        return key
+
+    monkeypatch.setattr("api.v1.ar_captures.storage.put_object", fake_put_object)
+    monkeypatch.setattr("api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+
+    with pytest.raises(RuntimeError, match="storage write failed"):
+        await app_client.post(
+            "/api/v1/ar-captures",
+            data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+            files=_files(rgb, depth),
+        )
+
+    assert set(removed_keys) == set(stored_keys)
 
 
 # ---------------------------------------------------------------------------

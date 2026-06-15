@@ -28,8 +28,10 @@ from app.config import settings
 from app.deps import DBSessionDep
 from api.v1.upload_limits import (
     assert_total_upload_bytes,
+    cleanup_stored_uploads,
     extension_for_allowed_upload,
     read_upload_bytes,
+    validate_depth_png_bytes,
     validate_image_bytes,
 )
 from core.errors import CaptureInvalid
@@ -50,7 +52,6 @@ ALLOWED_CONTENT_TYPES = {
     "image/jpg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
-    "image/heic": "heic",
 }
 
 Kind = Literal["brick", "plate", "tile", "slope"]
@@ -129,7 +130,7 @@ async def create_ar_capture(
         rgb_bytes = await read_upload_bytes(recognition_rgb, label="recognition_rgb")
         validate_image_bytes(rgb_bytes, label="recognition_rgb", content_type=recognition_rgb.content_type)
         depth_bytes = await read_upload_bytes(recognition_depth, label="recognition_depth")
-        validate_image_bytes(depth_bytes, label="recognition_depth", content_type=recognition_depth.content_type)
+        validate_depth_png_bytes(depth_bytes, label="recognition_depth", content_type=recognition_depth.content_type)
         total_bytes = len(rgb_bytes) + len(depth_bytes)
         assert_total_upload_bytes(total_bytes)
 
@@ -173,47 +174,56 @@ async def create_ar_capture(
         )
 
     # ---- 6. Upload recognition frame + angle photos to MinIO ------------
-    rgb_key = raw_object_key(str(capture_id), "recognition_rgb.png")
-    storage.put_object(_settings_s3_bucket_raw(), rgb_key, rgb_bytes, content_type=recognition_rgb.content_type or "image/png")
-    depth_key = raw_object_key(str(capture_id), "recognition_depth.png")
-    storage.put_object(_settings_s3_bucket_raw(), depth_key, depth_bytes, content_type="image/png")
     keys: list[str] = []
-    for filename, body, content_type in angle_uploads:
-        key = raw_object_key(str(capture_id), filename)
-        storage.put_object(_settings_s3_bucket_raw(), key, body, content_type=content_type)
-        keys.append(key)
+    raw_bucket = _settings_s3_bucket_raw()
+    try:
+        rgb_key = raw_object_key(str(capture_id), "recognition_rgb.png")
+        storage.put_object(raw_bucket, rgb_key, rgb_bytes, content_type=recognition_rgb.content_type or "image/png")
+        keys.append(rgb_key)
+        depth_key = raw_object_key(str(capture_id), "recognition_depth.png")
+        storage.put_object(raw_bucket, depth_key, depth_bytes, content_type="image/png")
+        keys.append(depth_key)
+        angle_keys: list[str] = []
+        for filename, body, content_type in angle_uploads:
+            key = raw_object_key(str(capture_id), filename)
+            storage.put_object(raw_bucket, key, body, content_type=content_type)
+            keys.append(key)
+            angle_keys.append(key)
 
-    # ---- 7. Persist the capture row -------------------------------------
-    capture = Capture(
-        id=capture_id,
-        part_id=part_id,
-        status="pending",
-        image_count=len(keys),
-        image_keys=keys,
-        capture_mode="phone_walkaround",
-        mode="ar_recognized",
-        system=result.system if recognized else None,
-        kind=kind,
-        units_x=result.units_x if recognized else None,
-        units_y=result.units_y if recognized else None,
-        ar_metadata=meta,
-        recognition_result=result.to_dict(),
-    )
-    session.add(capture)
-
-    # ---- 8. Dispatch a GLB job only when recognized ---------------------
-    job_id: uuid.UUID | None = None
-    if recognized:
-        job = Job(capture_id=capture_id, kind="reconstruct", status="pending", progress=0, stage="queued")
-        session.add(job)
-        job_id = await commit_and_dispatch_reconstruct(
-            session,
-            capture_id=capture_id,
-            job=job,
+        # ---- 7. Persist the capture row -------------------------------------
+        capture = Capture(
+            id=capture_id,
+            part_id=part_id,
+            status="pending",
+            image_count=len(angle_keys),
+            image_keys=angle_keys,
+            capture_mode="phone_walkaround",
+            mode="ar_recognized",
+            system=result.system if recognized else None,
+            kind=kind,
+            units_x=result.units_x if recognized else None,
+            units_y=result.units_y if recognized else None,
+            ar_metadata=meta,
+            recognition_result=result.to_dict(),
         )
+        session.add(capture)
 
-    await session.commit()
-    await session.refresh(capture)
+        # ---- 8. Dispatch a GLB job only when recognized ---------------------
+        job_id: uuid.UUID | None = None
+        if recognized:
+            job = Job(capture_id=capture_id, kind="reconstruct", status="pending", progress=0, stage="queued")
+            session.add(job)
+            job_id = await commit_and_dispatch_reconstruct(
+                session,
+                capture_id=capture_id,
+                job=job,
+            )
+
+        await session.commit()
+        await session.refresh(capture)
+    except Exception:
+        cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
+        raise
 
     logger.info(
         "ar_captures.create: capture_id=%s part_id=%s recognized=%s system=%s units=%sx%s "

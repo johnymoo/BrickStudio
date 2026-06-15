@@ -12,6 +12,7 @@ from app.config import settings
 from app.deps import DBSessionDep
 from api.v1.upload_limits import (
     assert_total_upload_bytes,
+    cleanup_stored_uploads,
     extension_for_allowed_upload,
     read_upload_bytes,
     validate_image_bytes,
@@ -34,7 +35,6 @@ ALLOWED_CONTENT_TYPES = {
     "image/jpg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
-    "image/heic": "heic",
 }
 
 #: Capture mode values. Stored verbatim in the capture row (phase 2 added
@@ -108,42 +108,47 @@ async def create_capture(
         for upload in images:
             await upload.close()
 
-    for key, body, content_type in staged_uploads:
-        storage.put_object(
-            settings_s3_bucket_raw(),
-            key,
-            body,
-            content_type=content_type,
+    raw_bucket = settings_s3_bucket_raw()
+    try:
+        for key, body, content_type in staged_uploads:
+            storage.put_object(
+                raw_bucket,
+                key,
+                body,
+                content_type=content_type,
+            )
+            keys.append(key)
+
+        # Persist capture row.
+        capture = Capture(
+            id=capture_id,
+            part_id=part_id,
+            status="pending",
+            image_count=len(keys),
+            image_keys=keys,
+            capture_mode=capture_mode,
         )
-        keys.append(key)
+        session.add(capture)
 
-    # Persist capture row.
-    capture = Capture(
-        id=capture_id,
-        part_id=part_id,
-        status="pending",
-        image_count=len(keys),
-        image_keys=keys,
-        capture_mode=capture_mode,
-    )
-    session.add(capture)
+        # Pre-create the job row so GET /jobs/{id} works before the worker boots.
+        job = Job(
+            capture_id=capture_id,
+            kind="reconstruct",
+            status="pending",
+            progress=0,
+            stage="queued",
+        )
+        session.add(job)
 
-    # Pre-create the job row so GET /jobs/{id} works before the worker boots.
-    job = Job(
-        capture_id=capture_id,
-        kind="reconstruct",
-        status="pending",
-        progress=0,
-        stage="queued",
-    )
-    session.add(job)
-
-    job_id = await commit_and_dispatch_reconstruct(
-        session,
-        capture_id=capture_id,
-        job=job,
-    )
-    await session.refresh(capture)
+        job_id = await commit_and_dispatch_reconstruct(
+            session,
+            capture_id=capture_id,
+            job=job,
+        )
+        await session.refresh(capture)
+    except Exception:
+        cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
+        raise
 
     logger.info(
         "captures.create: capture_id=%s part_id=%s images=%d mode=%s job_id=%s",

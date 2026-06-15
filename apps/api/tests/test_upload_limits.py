@@ -96,3 +96,13 @@ async def test_extension_for_allowed_upload_rejects_unsupported_content_type() -
         extension_for_allowed_upload(upload, label="image #0", allowed_content_types={"image/png": "png"})
 
     assert "unsupported content type" in str(exc.value)
+
+
+async def test_extension_for_allowed_upload_rejects_heic_without_decoder_support() -> None:
+    from api.v1.captures import ALLOWED_CONTENT_TYPES
+    from api.v1.upload_limits import extension_for_allowed_upload
+
+    upload = _upload("photo.heic", _png(), content_type="image/heic")
+
+    with pytest.raises(CaptureInvalid):
+        extension_for_allowed_upload(upload, label="image #0", allowed_content_types=ALLOWED_CONTENT_TYPES)
