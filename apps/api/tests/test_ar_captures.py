@@ -163,6 +163,24 @@ async def test_ar_capture_rejects_rgb_png_as_recognition_depth(app_client: Async
     assert "recognition_depth" in resp.text
 
 
+async def test_ar_capture_rejects_unsupported_recognition_rgb_content_type(app_client: AsyncIterator) -> None:
+    rgb, depth, meta = make_ar_bundle("feile")
+    files = [
+        ("recognition_rgb", ("rgb.svg", rgb, "image/svg+xml")),
+        ("recognition_depth", ("depth.png", depth, "image/png")),
+    ]
+    files += [("images", (f"{i}.png", _png(), "image/png")) for i in range(4)]
+
+    resp = await app_client.post(
+        "/api/v1/ar-captures",
+        data={"kind": "brick", "ar_metadata": json.dumps(meta)},
+        files=files,
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert "recognition_rgb" in resp.text
+
+
 async def test_ar_capture_rejects_later_invalid_angle_without_recognition_or_storage(
     app_client: AsyncIterator,
     monkeypatch: pytest.MonkeyPatch,
@@ -216,6 +234,31 @@ async def test_ar_capture_cleans_up_stored_raw_objects_when_later_put_fails(
         )
 
     assert set(removed_keys) == set(stored_keys)
+
+
+async def test_ar_capture_does_not_cleanup_after_needs_measurement_commit_boundary_on_refresh_failure(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    rgb, depth, meta = make_ar_bundle("feile")
+    removed_keys: list[str] = []
+
+    async def fail_refresh(self: AsyncSession, *_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("refresh failed after commit")
+
+    monkeypatch.setattr("api.v1.ar_captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(AsyncSession, "refresh", fail_refresh)
+
+    with pytest.raises(RuntimeError, match="refresh failed after commit"):
+        await app_client.post(
+            "/api/v1/ar-captures",
+            data={"kind": "brick", "ar_metadata": json.dumps(meta), "system_hint": "unknown"},
+            files=_files(rgb, depth),
+        )
+
+    assert removed_keys == []
 
 
 # ---------------------------------------------------------------------------

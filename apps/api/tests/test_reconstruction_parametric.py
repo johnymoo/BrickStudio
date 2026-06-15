@@ -222,6 +222,35 @@ async def test_create_parametric_block_cleans_up_stored_photos_when_later_put_fa
     assert set(removed_keys) == set(stored_keys)
 
 
+async def test_create_parametric_block_does_not_cleanup_after_dispatch_boundary_on_refresh_failure(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    removed_keys: list[str] = []
+    data, files = _multipart_with_photos(1)
+
+    async def fake_dispatch(*_args: object, **_kwargs: object) -> uuid.UUID:
+        return uuid.uuid4()
+
+    async def fail_refresh(self: AsyncSession, *_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("refresh failed after dispatch")
+
+    monkeypatch.setattr("api.v1.parametric_blocks.commit_and_dispatch_reconstruct", fake_dispatch)
+    monkeypatch.setattr("api.v1.parametric_blocks.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(AsyncSession, "refresh", fail_refresh)
+
+    with pytest.raises(RuntimeError, match="refresh failed after dispatch"):
+        await app_client.post(
+            "/api/v1/parametric-blocks",
+            data=data,
+            files=files,
+        )
+
+    assert removed_keys == []
+
+
 async def test_create_parametric_block_with_21_photos_returns_422(
     app_client: AsyncIterator,
 ) -> None:

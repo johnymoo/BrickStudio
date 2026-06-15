@@ -109,6 +109,7 @@ async def create_capture(
             await upload.close()
 
     raw_bucket = settings_s3_bucket_raw()
+    durable_state_committed = False
     try:
         for key, body, content_type in staged_uploads:
             storage.put_object(
@@ -145,9 +146,11 @@ async def create_capture(
             capture_id=capture_id,
             job=job,
         )
+        durable_state_committed = True
         await session.refresh(capture)
     except Exception:
-        cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
+        if not durable_state_committed:
+            cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
         raise
 
     logger.info(

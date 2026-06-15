@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import io
+import logging
 
 from fastapi import UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from app.config import settings
 from core.errors import CaptureInvalid
+
+logger = logging.getLogger(__name__)
 
 
 async def read_upload_bytes(
@@ -57,6 +60,12 @@ def cleanup_stored_uploads(bucket: str, keys: list[str], remove_object: object) 
         try:
             remove_object(bucket, key)  # type: ignore[misc]
         except Exception:
+            logger.warning(
+                "upload.cleanup_failed: bucket=%s key=%s",
+                bucket,
+                key,
+                exc_info=True,
+            )
             continue
 
 

@@ -127,6 +127,11 @@ async def create_ar_capture(
     # ---- 3. Read recognition frame + angle bytes ------------------------
     angle_uploads: list[tuple[str, bytes, str]] = []
     try:
+        rgb_ext = extension_for_allowed_upload(
+            recognition_rgb,
+            label="recognition_rgb",
+            allowed_content_types={"image/png": "png"},
+        )
         rgb_bytes = await read_upload_bytes(recognition_rgb, label="recognition_rgb")
         validate_image_bytes(rgb_bytes, label="recognition_rgb", content_type=recognition_rgb.content_type)
         depth_bytes = await read_upload_bytes(recognition_depth, label="recognition_depth")
@@ -176,9 +181,10 @@ async def create_ar_capture(
     # ---- 6. Upload recognition frame + angle photos to MinIO ------------
     keys: list[str] = []
     raw_bucket = _settings_s3_bucket_raw()
+    durable_state_committed = False
     try:
-        rgb_key = raw_object_key(str(capture_id), "recognition_rgb.png")
-        storage.put_object(raw_bucket, rgb_key, rgb_bytes, content_type=recognition_rgb.content_type or "image/png")
+        rgb_key = raw_object_key(str(capture_id), f"recognition_rgb.{rgb_ext}")
+        storage.put_object(raw_bucket, rgb_key, rgb_bytes, content_type="image/png")
         keys.append(rgb_key)
         depth_key = raw_object_key(str(capture_id), "recognition_depth.png")
         storage.put_object(raw_bucket, depth_key, depth_bytes, content_type="image/png")
@@ -218,11 +224,14 @@ async def create_ar_capture(
                 capture_id=capture_id,
                 job=job,
             )
+            durable_state_committed = True
 
         await session.commit()
+        durable_state_committed = True
         await session.refresh(capture)
     except Exception:
-        cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
+        if not durable_state_committed:
+            cleanup_stored_uploads(raw_bucket, keys, storage.remove_object)
         raise
 
     logger.info(

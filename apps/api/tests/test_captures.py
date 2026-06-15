@@ -134,6 +134,34 @@ async def test_create_capture_cleans_up_stored_images_when_later_put_fails(
     assert set(removed_keys) == set(stored_keys)
 
 
+async def test_create_capture_does_not_cleanup_after_dispatch_boundary_on_refresh_failure(
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    removed_keys: list[str] = []
+
+    async def fake_dispatch(*_args: object, **_kwargs: object) -> UUID:
+        return uuid4()
+
+    async def fail_refresh(self: AsyncSession, *_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("refresh failed after dispatch")
+
+    monkeypatch.setattr("api.v1.captures.commit_and_dispatch_reconstruct", fake_dispatch)
+    monkeypatch.setattr("api.v1.captures.storage.remove_object", lambda _bucket, key: removed_keys.append(key))
+    monkeypatch.setattr(AsyncSession, "refresh", fail_refresh)
+
+    with pytest.raises(RuntimeError, match="refresh failed after dispatch"):
+        await app_client.post(
+            "/api/v1/captures",
+            data={"part_id": "test-part-refresh-boundary"},
+            files=_files(4),
+        )
+
+    assert removed_keys == []
+
+
 async def test_get_unknown_capture_returns_404(app_client: AsyncIterator) -> None:
     import uuid
 
