@@ -896,6 +896,71 @@ def test_parametric_rerun_keeps_job_asset_and_part_consistent(
     assert part.asset_id == assets[0].id
 
 
+def test_parametric_finalize_rolls_back_asset_when_part_promotion_fails(
+    work_in_tmp: Path,
+    app_client: AsyncIterator,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from db.models import Asset, Job
+    from db.session import async_session_factory
+    from workers.tasks import reconstruct as reconstruct_module
+
+    resp = asyncio.get_event_loop().run_until_complete(
+        app_client.post(
+            "/api/v1/parametric-blocks",
+            data={
+                "part_id": "rollback-feile-2x2",
+                "system": "feile",
+                "kind": "brick",
+                "units_x": "2",
+                "units_y": "2",
+                "raw_measurements_mm": (
+                    '{"outer_pitch_mm":33.4,"inner_pitch_mm":6.6,'
+                    '"stud_diameter_mm":9.4,"brick_height_net_mm":19.2,'
+                    '"brick_height_total_mm":24.6}'
+                ),
+            },
+        )
+    )
+    assert resp.status_code == 201, resp.text
+    capture_id = resp.json()["capture_id"]
+    job_id = resp.json()["job_id"]
+
+    async def fail_part_promotion(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("forced part promotion failure")
+
+    monkeypatch.setattr(
+        reconstruct_module,
+        "upsert_part_for_capture",
+        fail_part_promotion,
+    )
+
+    result = reconstruct_module.reconstruct.apply(args=[capture_id])
+    assert result.failed() or result.state == "FAILURE", result.state
+
+    async def _assets_for_job() -> list[Asset]:
+        from sqlalchemy import select
+
+        f = async_session_factory()
+        async with f() as session:
+            job = await session.get(Job, uuid.UUID(job_id))
+            if job is None:
+                return []
+            return list(
+                (
+                    await session.scalars(
+                        select(Asset).where(
+                            Asset.job_id == job.id,
+                            Asset.kind == "mesh_gltf",
+                        )
+                    )
+                ).all()
+            )
+
+    assets = asyncio.run(_assets_for_job())
+    assert assets == []
+
+
 def _strip_scheme(url: str) -> str:
     """``http://host:port`` -> ``host:port`` (minio client expects no scheme)."""
     return url.split("://", 1)[-1] if "://" in url else url
