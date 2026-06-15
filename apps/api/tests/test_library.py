@@ -3,10 +3,20 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 import uuid
+
+import pytest
 
 from db.models import Asset, Capture, Job, Part
 from db.session import async_session_factory
+
+
+@pytest.fixture
+def library_admin_token(monkeypatch: pytest.MonkeyPatch) -> str:
+    token = "test-library-admin-token"
+    monkeypatch.setattr("app.auth.settings", SimpleNamespace(library_admin_token=token))
+    return token
 
 
 async def _make_part(
@@ -111,10 +121,22 @@ async def test_get_library_part_404(app_client) -> None:
     assert resp.json()["error"]["code"] == "PART_NOT_FOUND"
 
 
-async def test_patch_library_part_updates_fields(app_client) -> None:
+async def test_patch_library_part_requires_admin_token(app_client, library_admin_token: str) -> None:
+    part_id = await _make_part(name="before")
+
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        json={"name": "after"},
+    )
+
+    assert resp.status_code == 401, resp.text
+
+
+async def test_patch_library_part_updates_fields(app_client, library_admin_token: str) -> None:
     part_id = await _make_part(name="before")
     resp = await app_client.patch(
         f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": library_admin_token},
         json={"name": "after", "notes": "great", "status": "verified"},
     )
     assert resp.status_code == 200, resp.text
@@ -124,37 +146,63 @@ async def test_patch_library_part_updates_fields(app_client) -> None:
     assert body["status"] == "verified"
 
 
-async def test_patch_library_part_rejects_bad_status(app_client) -> None:
+async def test_patch_library_part_rejects_bad_status(app_client, library_admin_token: str) -> None:
     part_id = await _make_part()
-    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"status": "bogus"})
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": library_admin_token},
+        json={"status": "bogus"},
+    )
     assert resp.status_code == 422, resp.text
 
 
-async def test_patch_library_part_rejects_null_name(app_client) -> None:
+async def test_patch_library_part_rejects_null_name(app_client, library_admin_token: str) -> None:
     part_id = await _make_part()
-    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"name": None})
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": library_admin_token},
+        json={"name": None},
+    )
     assert resp.status_code == 422, resp.text
 
 
-async def test_patch_library_part_rejects_empty_name(app_client) -> None:
+async def test_patch_library_part_rejects_empty_name(app_client, library_admin_token: str) -> None:
     part_id = await _make_part()
-    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"name": ""})
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": library_admin_token},
+        json={"name": ""},
+    )
     assert resp.status_code == 422, resp.text
 
 
-async def test_patch_library_part_rejects_name_over_db_limit(app_client) -> None:
+async def test_patch_library_part_rejects_name_over_db_limit(
+    app_client, library_admin_token: str
+) -> None:
     part_id = await _make_part()
-    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"name": "x" * 129})
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": library_admin_token},
+        json={"name": "x" * 129},
+    )
     assert resp.status_code == 422, resp.text
 
 
-async def test_patch_library_part_rejects_null_status(app_client) -> None:
+async def test_patch_library_part_rejects_null_status(app_client, library_admin_token: str) -> None:
     part_id = await _make_part()
-    resp = await app_client.patch(f"/api/v1/library/{part_id}", json={"status": None})
+    resp = await app_client.patch(
+        f"/api/v1/library/{part_id}",
+        headers={"X-Library-Admin-Token": library_admin_token},
+        json={"status": None},
+    )
     assert resp.status_code == 422, resp.text
 
 
-async def test_patch_library_part_404(app_client) -> None:
-    resp = await app_client.patch(f"/api/v1/library/{uuid.uuid4()}", json={"name": "x"})
+async def test_patch_library_part_404(app_client, library_admin_token: str) -> None:
+    resp = await app_client.patch(
+        f"/api/v1/library/{uuid.uuid4()}",
+        headers={"X-Library-Admin-Token": library_admin_token},
+        json={"name": "x"},
+    )
     assert resp.status_code == 404, resp.text
     assert resp.json()["error"]["code"] == "PART_NOT_FOUND"

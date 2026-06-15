@@ -6,9 +6,10 @@ import logging
 import uuid
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 
+from app.auth import require_library_admin
 from app.deps import DBSessionDep
 from core.errors import PartNotFound
 from db.models import Part
@@ -47,6 +48,7 @@ async def update_part(
     part_id: uuid.UUID,
     payload: LibraryPartUpdate,
     session: DBSessionDep,
+    _: Annotated[None, Depends(require_library_admin)],
 ) -> LibraryPartRead:
     part = await session.get(Part, part_id)
     if part is None:

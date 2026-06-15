@@ -246,14 +246,24 @@ export async function getLibraryPart(id: string, signal?: AbortSignal): Promise<
   return request<LibraryPart>(`/library/${encodeURIComponent(id)}`, { method: "GET" }, signal);
 }
 
+function getLibraryAdminToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const token = window.localStorage.getItem("blocktool.libraryAdminToken");
+  return token && token.trim() ? token.trim() : null;
+}
+
 export async function updateLibraryPart(
   id: string,
   patch: { name?: string; notes?: string | null; status?: PartStatus },
   signal?: AbortSignal,
 ): Promise<LibraryPart> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  const token = getLibraryAdminToken();
+  if (token) headers.set("X-Library-Admin-Token", token);
+
   return request<LibraryPart>(
     `/library/${encodeURIComponent(id)}`,
-    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) },
+    { method: "PATCH", headers, body: JSON.stringify(patch) },
     signal,
   );
 }

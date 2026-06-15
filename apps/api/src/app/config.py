@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     )
     environment: Literal["dev", "test", "staging", "prod"] = "dev"
     log_level: str = "INFO"
+    library_admin_token: str | None = Field(
+        default=None,
+        description="Bearer-like shared secret required for library mutation endpoints.",
+    )
 
     # ---- 3D reconstruction (phase 2) ---------------------------------------
     colmap_bin: str | None = Field(

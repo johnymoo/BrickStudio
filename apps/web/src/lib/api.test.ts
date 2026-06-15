@@ -246,7 +246,10 @@ const server = setupServer(
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterAll(() => server.close());
-afterEach(() => server.resetHandlers());
+afterEach(() => {
+  server.resetHandlers();
+  window.localStorage.clear();
+});
 
 let restoreFetch: (() => void) | null = null;
 beforeEach(() => {
@@ -368,6 +371,37 @@ describe("library api", () => {
     const part = await updateLibraryPart("p1", { name: "renamed", status: "verified" });
     expect(part.name).toBe("renamed");
     expect(part.status).toBe("verified");
+  });
+
+  it("sends the library admin token when updating a part", async () => {
+    window.localStorage.setItem("blocktool.libraryAdminToken", "test-token");
+    let observedToken: string | null = null;
+    server.use(
+      http.patch("*/api/v1/library/p1", async ({ request }) => {
+        observedToken = request.headers.get("X-Library-Admin-Token");
+        return HttpResponse.json({
+          part_id: "p1",
+          capture_id: "c1",
+          asset_id: "a1",
+          source_mode: "parametric_block",
+          system: "feile",
+          kind: "brick",
+          units_x: 2,
+          units_y: 2,
+          derived_spec_mm: null,
+          color: null,
+          name: "renamed",
+          notes: null,
+          status: "verified",
+          created_at: "<PRIVATE_DATE>",
+          updated_at: "<PRIVATE_DATE>",
+        });
+      }),
+    );
+
+    await updateLibraryPart("p1", { name: "renamed", status: "verified" });
+
+    expect(observedToken).toBe("test-token");
   });
 });
 
