@@ -20,7 +20,7 @@
 # by default, so we don't set those explicitly (would be redundant).
 # =============================================================================
 
-:{$PROXY_HTTP_PORT:80} {
+(app_routes) {
 	# CORS preflight short-circuit. Must come BEFORE the API / MinIO
 	# handle blocks so OPTIONS /api/* does not get proxied upstream.
 	@cors_preflight method OPTIONS
@@ -60,6 +60,14 @@
 
 	encode zstd gzip
 	log
+}
+
+:{$PROXY_HTTP_PORT:80} {
+	import app_routes
+}
+
+:443 {
+	import app_routes
 }
 
 :9000 {

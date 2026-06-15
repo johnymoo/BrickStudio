@@ -9,6 +9,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CADDY_LISTENERS = (":{$PROXY_HTTP_PORT:80}", ":443", ":9000")
 
 
 def _read(path: str) -> str:
@@ -57,6 +58,15 @@ def _environment(config: dict[str, Any], service_name: str) -> dict[str, Any]:
     if isinstance(environment, list):
         return dict(item.split("=", 1) for item in environment)
     return dict(environment)
+
+
+def _caddy_listeners() -> set[int]:
+    caddyfile = _read("deploy/Caddyfile")
+    listeners: set[int] = set()
+    for listener in CADDY_LISTENERS:
+        if f"{listener} {{" in caddyfile:
+            listeners.add(int(listener.rsplit(":", 1)[1].rstrip("}")))
+    return listeners
 
 
 def test_base_compose_publishes_only_proxy_ports_on_loopback() -> None:
@@ -146,6 +156,25 @@ def test_custom_s3_proxy_port_publishes_to_stable_caddy_listener() -> None:
     assert s3_ports[0]["host_ip"] == "127.0.0.1"
     assert ":9000 {" in _read("deploy/Caddyfile")
     assert ":{$S3_PROXY_PORT:9000}" not in _read("deploy/Caddyfile")
+
+
+def test_proxy_published_targets_have_matching_caddy_listeners() -> None:
+    config = _compose_config("deploy/docker-compose.yml")
+    proxy_targets = {port["target"] for port in _ports(config, "proxy")}
+
+    assert proxy_targets == {80, 443, 9000}
+    assert proxy_targets <= _caddy_listeners()
+
+
+def test_custom_https_host_port_still_targets_stable_caddy_listener() -> None:
+    config = _compose_config("deploy/docker-compose.yml", env={"PROXY_HTTPS_PORT": "18443"})
+    https_ports = [port for port in _ports(config, "proxy") if port["target"] == 443]
+
+    assert len(https_ports) == 1
+    assert https_ports[0]["published"] == "18443"
+    assert https_ports[0]["host_ip"] == "127.0.0.1"
+    assert 443 in _caddy_listeners()
+    assert ":{$PROXY_HTTPS_PORT:443}" not in _read("deploy/Caddyfile")
 
 
 def test_recon_bucket_is_not_anonymous_and_s3_public_endpoint_uses_proxy() -> None:
