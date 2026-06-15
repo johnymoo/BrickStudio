@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import Job
+from db.models import Capture, Job
 from workers.tasks.reconstruct import reconstruct as reconstruct_task
 
 
@@ -37,6 +37,9 @@ async def commit_and_dispatch_reconstruct(
         job.stage = "failed"
         job.error = f"failed to enqueue reconstruct task: {exc}"
         job.finished_at = datetime.now(UTC)
+        capture = await session.get(Capture, capture_id)
+        if capture is not None:
+            capture.status = "failed"
         await session.commit()
         raise
 

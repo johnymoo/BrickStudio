@@ -154,6 +154,9 @@ async def test_dispatch_failure_marks_committed_job_failed(monkeypatch: pytest.M
 
     async with factory() as session:
         committed_job = await session.get(Job, job_id)
+        committed_capture = await session.get(Capture, capture_id)
+        assert committed_capture is not None
+        assert committed_capture.status == "failed"
         assert committed_job is not None
         assert committed_job.status == "failed"
         assert committed_job.stage == "failed"
