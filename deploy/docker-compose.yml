@@ -13,9 +13,13 @@
 name: ${PROJECT_NAME:-blocktool}
 
 networks:
-  blocknet:
-    name: blocknet
+  frontend:
     driver: bridge
+  backend:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
 
 x-api-env: &api-env
   DATABASE_URL: ${DATABASE_URL}
@@ -38,7 +42,6 @@ services:
   # ---------------------------------------------------------------- Postgres
   postgres:
     image: postgres:16-alpine
-    container_name: ${PROJECT_NAME:-blocktool}_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -46,9 +49,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pg_data:/var/lib/postgresql/data
-    networks: [blocknet]
-    ports:
-      - "0.0.0.0:5432:5432"
+    networks: [data]
+    expose:
+      - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -59,14 +62,13 @@ services:
   # ------------------------------------------------------------------- Redis
   redis:
     image: redis:7-alpine
-    container_name: ${PROJECT_NAME:-blocktool}_redis
     restart: unless-stopped
     command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis_data:/data
-    networks: [blocknet]
-    ports:
-      - "0.0.0.0:6379:6379"
+    networks: [backend]
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -77,7 +79,6 @@ services:
   # ------------------------------------------------------------------- MinIO
   minio:
     image: minio/minio:latest
-    container_name: ${PROJECT_NAME:-blocktool}_minio
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -85,10 +86,10 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    networks: [blocknet]
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    networks: [backend]
+    expose:
+      - "9000"
+      - "9001"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 10s
@@ -99,17 +100,15 @@ services:
   # --------------------------------------------------------- minio (one-shot)
   minio-init:
     image: minio/mc:latest
-    container_name: ${PROJECT_NAME:-blocktool}_minio_init
     depends_on:
       minio:
         condition: service_healthy
-    networks: [blocknet]
+    networks: [backend]
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
       (mc mb --ignore-existing local/${MINIO_BUCKET_CAPTURES} || true) &&
       (mc mb --ignore-existing local/${MINIO_BUCKET_RECON} || true) &&
-      mc anonymous set download local/${MINIO_BUCKET_RECON} || true &&
       echo 'minio-init: buckets ready'
       "
     restart: "no"
@@ -120,11 +119,10 @@ services:
       context: ..
       dockerfile: apps/api/Dockerfile
     image: ${PROJECT_NAME:-blocktool}_api:latest
-    container_name: ${PROJECT_NAME:-blocktool}_api
     restart: unless-stopped
     environment:
       <<: *api-env
-    networks: [blocknet]
+    networks: [backend, data]
     depends_on:
       postgres:
         condition: service_healthy
@@ -134,8 +132,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    ports:
-      - "0.0.0.0:${API_PORT:-8000}:8000"
+    expose:
+      - "8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
       interval: 30s
@@ -149,11 +147,10 @@ services:
       context: ..
       dockerfile: apps/api/Dockerfile
     image: ${PROJECT_NAME:-blocktool}_api:latest
-    container_name: ${PROJECT_NAME:-blocktool}_worker
     restart: unless-stopped
     environment:
       <<: *api-env
-    networks: [blocknet]
+    networks: [backend, data]
     depends_on:
       postgres:
         condition: service_healthy
@@ -195,11 +192,10 @@ services:
       context: ..
       dockerfile: apps/web/Dockerfile
     image: ${PROJECT_NAME:-blocktool}_web:latest
-    container_name: ${PROJECT_NAME:-blocktool}_web
     restart: unless-stopped
-    networks: [blocknet]
-    ports:
-      - "0.0.0.0:${WEB_DEV_PORT:-8080}:80"
+    networks: [frontend]
+    expose:
+      - "80"
     depends_on:
       api:
         condition: service_healthy
@@ -213,12 +209,12 @@ services:
   # ------------------------------------------------------------------ Proxy
   proxy:
     image: caddy:2-alpine
-    container_name: ${PROJECT_NAME:-blocktool}_proxy
     restart: unless-stopped
-    networks: [blocknet]
+    networks: [frontend, backend]
     ports:
-      - "${PROXY_HTTP_PORT:-80}:80"
-      - "${PROXY_HTTPS_PORT:-443}:443"
+      - "${PROXY_HTTP_BIND:-127.0.0.1}:${PROXY_HTTP_PORT:-80}:80"
+      - "${PROXY_HTTPS_BIND:-127.0.0.1}:${PROXY_HTTPS_PORT:-443}:443"
+      - "${S3_PROXY_BIND:-127.0.0.1}:${S3_PROXY_PORT:-9000}:9000"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -251,8 +247,7 @@ services:
       context: ..
       dockerfile: apps/api/Dockerfile
     image: ${PROJECT_NAME:-blocktool}_api:latest
-    container_name: ${PROJECT_NAME:-blocktool}_migrate
-    networks: [blocknet]
+    networks: [data]
     environment:
       <<: *api-env
     depends_on:

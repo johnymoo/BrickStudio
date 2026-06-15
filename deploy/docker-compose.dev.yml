@@ -28,21 +28,21 @@ x-api-env: &api-env
   LOG_LEVEL: ${LOG_LEVEL:-info}
   PYTHONUNBUFFERED: "1"
   PUBLIC_WEB_BASE_URL: ${PUBLIC_WEB_BASE_URL}
-  CORS_ORIGINS: ${PUBLIC_WEB_BASE_URL}
+  CORS_ORIGINS: ${DEV_PUBLIC_WEB_BASE_URL:-http://localhost:5173}
 
 services:
   postgres:
     ports:
-      - "0.0.0.0:5432:5432"
+      - "127.0.0.1:5432:5432"
 
   redis:
     ports:
-      - "0.0.0.0:6379:6379"
+      - "127.0.0.1:6379:6379"
 
   minio:
     ports:
-      - "0.0.0.0:${MINIO_API_PORT:-9000}:9000"
-      - "0.0.0.0:${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
 
   api:
     build:
@@ -62,6 +62,8 @@ services:
       <<: *api-env
       ENVIRONMENT: dev
     user: "0:0"
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
       interval: 15s
@@ -90,7 +92,6 @@ services:
       context: ..
       dockerfile: apps/web/Dockerfile.dev
     image: ${PROJECT_NAME:-blocktool}_web_dev:latest
-    container_name: ${PROJECT_NAME:-blocktool}_web_dev
     working_dir: /repo/apps/web
     command: >
       sh -c "corepack enable &&
@@ -103,14 +104,15 @@ services:
       - web_node_modules:/repo/apps/web/node_modules
       - web_pnpm_store:/repo/.pnpm-store
     networks:
-      - blocknet
+      - frontend
     ports:
-      - "0.0.0.0:${WEB_DEV_PORT:-5173}:5173"
+      - "127.0.0.1:${WEB_DEV_PORT:-5173}:5173"
     environment:
-      VITE_API_BASE_URL: ${PUBLIC_API_BASE_URL:-http://localhost:8000}
+      VITE_API_BASE_URL: ${DEV_PUBLIC_API_BASE_URL:-http://localhost:8000}
       NODE_ENV: development
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
       interval: 30s
@@ -135,7 +137,6 @@ services:
       context: ..
       dockerfile: apps/web/Dockerfile.dev
     image: ${PROJECT_NAME:-blocktool}_web_dev:latest
-    container_name: ${PROJECT_NAME:-blocktool}_e2e
     working_dir: /repo
     command:
       - sh
@@ -150,7 +151,7 @@ services:
       - e2e_node_modules:/repo/node_modules
       - e2e_pnpm_store:/repo/.pnpm-store
     networks:
-      - blocknet
+      - frontend
     environment:
       # When the proxy is off, the API is reachable on the host loopback
       # from inside the container via host.docker.internal.
@@ -170,8 +171,3 @@ volumes:
     name: ${PROJECT_NAME:-blocktool}_e2e_node_modules
   e2e_pnpm_store:
     name: ${PROJECT_NAME:-blocktool}_e2e_pnpm_store
-
-networks:
-  blocknet:
-    name: blocknet
-    driver: bridge

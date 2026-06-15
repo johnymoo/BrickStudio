@@ -61,3 +61,10 @@
 	encode zstd gzip
 	log
 }
+
+:{$S3_PROXY_PORT:9000} {
+	reverse_proxy minio:9000
+
+	encode zstd gzip
+	log
+}
