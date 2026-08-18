@@ -1,0 +1,27 @@
+name: blocktool-pg-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: blocktool_postgres_dev
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BLOCKTOOL_DEV_DB_NAME:-blocktool}
+      POSTGRES_USER: ${BLOCKTOOL_DEV_DB_USER:-blocktool}
+      POSTGRES_PASSWORD: ${BLOCKTOOL_DEV_DB_PASSWORD:?set BLOCKTOOL_DEV_DB_PASSWORD}
+    ports:
+      - "${BLOCKTOOL_DEV_DB_HOST:-0.0.0.0}:${BLOCKTOOL_DEV_DB_PORT:-15432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BLOCKTOOL_DEV_DB_USER:-blocktool} -d ${BLOCKTOOL_DEV_DB_NAME:-blocktool}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  pgdata:
+    external: true
+    name: blocktool_pg_dev
